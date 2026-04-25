@@ -11,7 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 
-public class MapFile implements AutoCloseable {
+public class MapDatabase implements AutoCloseable {
 				
 	class SelectResult {
 		
@@ -70,12 +70,12 @@ public class MapFile implements AutoCloseable {
 	 * 
 	 * @param file The file containing map data.
 	 * 
-	 * @throws MapFileException if the file cannot be accessed or does not contain appropriate data.
+	 * @throws MapDatabaseException If the database cannot be accessed or does not contain appropriate data.
 	 */
-	public MapFile(File file) throws MapFileException {
+	public MapDatabase(File file) throws MapDatabaseException {
 		this.file = file;
 		this.connectPool = JdbcConnectionPool.create("jdbc:h2:"+file.getAbsolutePath(), DB_USER, "");
-		try (MapFileLoader loader = new MapFileLoader(this)) {
+		try (DatabaseLoader loader = new DatabaseLoader(this)) {
 			this.registry = new MapRegistry();
 			loader.init();
 		}
@@ -86,10 +86,10 @@ public class MapFile implements AutoCloseable {
 	 * Closes this map file.
 	 * This method waits for all views and current build pool to be closed.
 	 * 
-	 * @throws MapFileException If the map cannot be closed.
-	 * @throws InterruptedException If interrupted while waiting for views and pool.
+	 * @throws MapDatabaseException If the database cannot be closed.
+	 * @throws InterruptedException If interrupted while waiting for views and pools.
 	 */
-	synchronized public void close() throws MapFileException, InterruptedException {
+	synchronized public void close() throws MapDatabaseException, InterruptedException {
 		while (connectPool.getActiveConnections()>0) {
 			Thread.sleep(1000);
 		}

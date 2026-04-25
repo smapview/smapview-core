@@ -17,12 +17,18 @@ public class RegularPattern {
 		}
 	}
 
-	public String[] matchGroups(String str) {
+	public String[] getGroups(String str) {
 		Matcher m = pattern.matcher(str);
 		if (!m.matches()) throw new IllegalArgumentException();
 		String[] groups = new String[m.groupCount()];
 		for (int i=0; i<m.groupCount(); i++) groups[i] = m.group(i+1);
 		return groups;
+	}
+
+	public String getGroup(String str, int group) {
+		Matcher m = pattern.matcher(str);
+		if (!m.matches()) throw new IllegalArgumentException();
+		return m.group(group);
 	}
 
 }

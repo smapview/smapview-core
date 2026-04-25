@@ -2,8 +2,6 @@ package com.smapview.core.map;
 
 import java.util.List;
 
-import com.smapview.core.map.NodePool.PoolMode;
-
 import graphql.ExecutionResult;
 import graphql.GraphQL;
 import graphql.schema.GraphQLSchema;
@@ -12,11 +10,11 @@ import graphql.schema.idl.SchemaGenerator;
 
 public class MapView implements AutoCloseable {
 
-	final MapFileConnection mfc;
+	final DatabaseConnection dbc;
 	
-	public MapView(MapFile file) throws MapFileException {
-		file.viewLock.readLock().lock();
-		this.mfc = new MapFileConnection(file);
+	public MapView(MapDatabase db) throws MapDatabaseException {
+		db.viewLock.readLock().lock();
+		this.dbc = new DatabaseConnection(db);
 	}
 
 	Node getNode(String path) {
@@ -51,29 +49,42 @@ public class MapView implements AutoCloseable {
 
 	@Override
 	public void close() throws Exception {
-		mfc.file.viewLock.readLock().unlock();
-		mfc.close();
+		dbc.db.viewLock.readLock().unlock();
+		dbc.close();
 	}
 	
 	/**
-	 * Opens a new pool to create or update a map part.
+	 * Creates a new pool to update the map.
 	 * 
-	 * @param partPath  Map part unique path. 
-	 * @param mode      Tells if pool is used to update or create/replace map part.
-	 * @return  The pool opened for map part creation or update.
-	 * @throws MapFileException If map file cannot be accessed.
+	 * @param source  Identifies the data source used to perform the update.
+	 * 
+	 * @return The pool created for map update.
+	 * 
+	 * @throws MapDatabaseException If failing to read from or write to the database. 
 	 */
-	public NodePool openPool(String partPath, PoolMode mode) throws MapFileException {
-		mfc.file.poolLock.lock();
-		return new NodePool(this, partPath, mode);
+	public NodePool createPool(String source) throws MapDatabaseException {
+		dbc.db.poolLock.lock();
+		return new NodePool(this, source);
 	}
 	
 	MapRegistry getRegistry() {
-		return mfc.file.registry;
+		return dbc.db.registry;
 	}
 	
 	public MapSchema getSchema() {
 		return getRegistry().getSchema();
+	}
+	
+	/**
+	 * Gets the last pool statistics for a given source.
+	 * 
+	 * @param source  The data source used to perform the update.
+	 * 
+	 * @return The last-created pool statistics for the specified source.
+	 */
+	public PoolStats getLastPoolStats(String source) {
+		// TODO complete this
+		return null;
 	}
 
 }

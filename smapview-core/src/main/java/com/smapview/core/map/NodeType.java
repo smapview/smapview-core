@@ -15,18 +15,27 @@ public class NodeType extends SchemaElement {
 
 	enum ValueType {
 
-		BOOLEAN,
+		BOOLEAN("Boolean"),
 		
-		INTEGER,
+		INTEGER("Int"),
 		
-		FLOAT,
+		FLOAT("Float"),
 		
-		STRING,
+		STRING("String");
+
+		final String typeName;
 		
-		NODE,
+		private ValueType(String typeName) {
+			this.typeName = typeName;
+		}
 		
-		LIST;
-		
+		static ValueType fromTypeName(String typeName) {
+			for (ValueType type : values()) {
+				if (type.typeName.equals(typeName)) return type;
+			}
+			throw new IllegalArgumentException();
+		}
+				
 	}
 	
 	enum LinkType {
@@ -62,7 +71,7 @@ public class NodeType extends SchemaElement {
 			super(type.schema, type.name + "." + localName);
 			this.type = type;
 			this.localName = localName;
-			FIELD_LOCAL_NAME_PATTERN.check(localName);
+			FIELD_NAME_PATTERN.check(localName);
 			type.fieldList.add(this);
 			schema.declare(this);
 		}
@@ -80,18 +89,17 @@ public class NodeType extends SchemaElement {
 	
 	static public class ValueField extends TypeField {
 		
-		final ValueType baseType;
+		final ValueType valueType;
 		
-		final ValueType itemType;
+		final boolean list;
 		
-		final int dataIndex;
+		final short dataIndex;
 		
-		ValueField(NodeType type, String name, ValueType baseType, ValueType itemType) {
+		ValueField(NodeType type, String name, ValueType valueType, boolean list) {
 			super(type, name);
-			if (baseType==null) throw new IllegalArgumentException();
-			if (baseType==ValueType.LIST && itemType==null) throw new IllegalArgumentException();
-			this.baseType = baseType;
-			this.itemType = itemType;
+			if (valueType==null) throw new IllegalArgumentException();
+			this.valueType = valueType;
+			this.list = list;
 			this.dataIndex = type.dataLength++;	
 		}
 
@@ -99,16 +107,27 @@ public class NodeType extends SchemaElement {
 		void compile() throws SchemaBuildException {}
 
 	}
-	
+
+	static public class KeyField extends ValueField {
+
+		final short keyId;
+
+		KeyField(NodeType type, String name, short keyId) {
+			super(type, name, ValueType.STRING, true);
+			this.keyId = keyId;
+		}
+		
+	}
+
 	static public class LinkField extends TypeField {
 		
-		final int linkId;
+		final short linkId;
 
 		final String targetType;
 		
 		private LinkType linkType;
 				
-		LinkField(NodeType type, String name, int linkId, String targetType) {
+		LinkField(NodeType type, String name, short linkId, String targetType) {
 			super(type, name);
 			this.linkId = linkId;
 			this.targetType = targetType;
@@ -141,11 +160,11 @@ public class NodeType extends SchemaElement {
 
 	}
 	
-	public class FolderField extends LinkField {
+	static public class FolderField extends LinkField {
 		
 		final MapFolder folder;
 
-		FolderField(NodeType type, String name, int linkId, String contentType, String folderAlias) {
+		FolderField(NodeType type, String name, short linkId, String contentType, String folderAlias) {
 			super(type, name, linkId, contentType);
 			this.folder = new MapFolder(schema, folderAlias, this);
 			schema.declare(folder);
@@ -153,9 +172,24 @@ public class NodeType extends SchemaElement {
 
 	}
 	
+	static public class JoinField extends LinkField {
+		
+		final String joinKey;
+
+		final short dataIndex;
+
+		JoinField(NodeType type, String name, short linkId, String joinKey) {
+			super(type, name, linkId, 
+					MapSchema.FIELD_QUALIFIED_NAME_PATTERN.getGroup(joinKey, 1));
+			this.joinKey = joinKey;
+			this.dataIndex = type.dataLength++;	
+		}		
+		
+	}
+	
 	static final RegularPattern TYPE_NAME_PATTERN = new RegularPattern("[A-Z][a-zA-Z0-9]+"); 
 
-	static final RegularPattern FIELD_LOCAL_NAME_PATTERN = new RegularPattern("[a-z][a-zA-Z0-9]+");
+	static final RegularPattern FIELD_NAME_PATTERN = new RegularPattern("[a-z][a-zA-Z0-9]+");
 
 	static final String REGISTRY_KEY_PREFIX = "map.types.";
 	
@@ -165,7 +199,7 @@ public class NodeType extends SchemaElement {
 	
 	MapFolder folder;
 	
-	int dataLength = 0;
+	short dataLength = 0;
 	
 	boolean modified = false; 
 	
@@ -177,7 +211,7 @@ public class NodeType extends SchemaElement {
 	}
 				
 	/**
-	 * Creates a primary node type with a root folder.
+	 * Creates a node type with a root folder.
 	 */
 	NodeType(MapSchema schema, String typeName, String folderName, String folderAlias) {
 		this(schema, typeName, (String)null);
@@ -185,20 +219,13 @@ public class NodeType extends SchemaElement {
 	}
 
 	/**
-	 * Creates a primary node type with a field folder.
+	 * Creates a node type with a field folder.
 	 */
 	NodeType(MapSchema schema, String typeName, FolderField field) {
 		this(schema, typeName, field.name);
 	}
-
-	/**
-	 * Creates a secondary node type.
-	 */
-	NodeType(MapSchema schema, String typeName) {
-		this(schema, typeName, (String)null);
-	}
 	
-	NodeType(MapSchema schema, RegistryEntry entry) throws MapFileException {
+	NodeType(MapSchema schema, RegistryEntry entry) throws MapDatabaseException {
 		super(schema, entry.key.substring(REGISTRY_KEY_PREFIX.length()));
 		JsonObject json = entry.getObject();
 		boolean primary = json.getBoolean("primary");
@@ -262,15 +289,22 @@ public class NodeType extends SchemaElement {
 				.add("name", field.name)
 				.add("type", fieldType);
 		if (field instanceof ValueField value) {
-			json.add("baseType", value.baseType.name());
-			json.add("itemType", value.itemType != null? 
-					value.itemType.name() : null);						
+			json.add("valueType", value.valueType.name());
+			if (field instanceof KeyField key) {
+				json.add("keyId", key.keyId);				
+			}
+			else {
+				json.add("list", value.list);
+			}
 		}
 		else if (field instanceof LinkField link) {
 			json.add("linkId", link.linkId);
 			if (field instanceof FolderField) {
 				json.add("contentType", link.targetType);
 				json.add("folderAlias", folder.alias);
+			}
+			else if (field instanceof JoinField jf) {
+				json.add("joinKey", jf.joinKey);
 			}
 			else {
 				json.add("linkType", link.linkType.abbrev);
@@ -280,25 +314,28 @@ public class NodeType extends SchemaElement {
 		return json.build();
 	}
 	
-	TypeField toField(JsonObject json) throws MapFileException {
+	TypeField toField(JsonObject json) throws MapDatabaseException {
 		String name = json.getString("name");
 		String fieldType = json.getString("fieldType");
 		if (fieldType.equals("value")) {
-			String itemType = json.getString("baseType", null);
-			return new ValueField(this, name,
-					ValueType.valueOf(json.getString("baseType")),
-					itemType != null? ValueType.valueOf(itemType) : null);			
+			ValueType valueType = ValueType.fromTypeName(json.getString("valueType"));
+			short keyId = (short)json.getInt("keyId", 0);
+			return keyId != 0? new KeyField(this, name, keyId)
+					: new ValueField(this, name, valueType, json.getBoolean("list"));
 		}
 		else if (fieldType.equals("link")) {
-			return new LinkField(this, name,
-					json.getInt("linkId"), json.getString("targetType"));
+			String joinKey = json.getString("joinKey", null);
+			if (joinKey != null) return new JoinField(this, name,
+					(short)json.getInt("linkId"), joinKey);
+			else return new LinkField(this, name,
+					(short)json.getInt("linkId"), json.getString("targetType"));
 		}
 		else if (fieldType.equals("folder")) {
 			return new FolderField(this, name,
-					json.getInt("linkId"), json.getString("contentType"),
+					(short)json.getInt("linkId"), json.getString("contentType"),
 					json.getString("folderAlias"));			
 		}
-		else throw new MapFileException("Invalid field type: "+fieldType);
+		else throw new MapDatabaseException("Invalid field type: "+fieldType);
 	}
 
 	public TypeField getField(String fieldName) {

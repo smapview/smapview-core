@@ -4,18 +4,18 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
-class MapFileConnection implements AutoCloseable {
+class DatabaseConnection implements AutoCloseable {
 
-	final MapFile file;
+	final MapDatabase db;
 	
-	final Connection dbc;
+	final Connection jdbc;
 
-	MapFileConnection(MapFile file) throws MapFileException {
+	DatabaseConnection(MapDatabase db) throws MapDatabaseException {
 		try {
-			this.file = file;
-			this.dbc = file.connectPool.getConnection();
+			this.db = db;
+			this.jdbc = db.connectPool.getConnection();
 		} catch (SQLException e) {
-			throw new MapFileException(e);
+			throw new MapDatabaseException(e);
 		}
 	}
 	
@@ -29,40 +29,40 @@ class MapFileConnection implements AutoCloseable {
 		}		
 	}
 	
-	PreparedStatement prepare(String sql, Object... params) throws MapFileException {
+	PreparedStatement prepare(String sql, Object... params) throws MapDatabaseException {
 		try {
-			PreparedStatement pst = dbc.prepareStatement(sql);
+			PreparedStatement pst = jdbc.prepareStatement(sql);
 			setParams(pst, params);
 			return pst;
 		} catch (SQLException e) {
-			throw new MapFileException(e);
+			throw new MapDatabaseException(e);
 		}
 	}
 
-	void exec(String sql, Object... params) throws MapFileException {
+	void exec(String sql, Object... params) throws MapDatabaseException {
 		try (PreparedStatement pst = prepare(sql, params)) {
 			pst.execute();
 		} 
 		catch (SQLException e) {
-			throw new MapFileException(e);
+			throw new MapDatabaseException(e);
 		}
 	}
 	
-	int execUpdate(String sql, Object... params) throws MapFileException {
+	int execUpdate(String sql, Object... params) throws MapDatabaseException {
 		try (PreparedStatement pst = prepare(sql, params)) {
 			pst.execute();
 			return pst.getUpdateCount();
 		}
 		catch (SQLException e) {
-			throw new MapFileException(e);
+			throw new MapDatabaseException(e);
 		}
 	}
 
-	public void close() throws MapFileException {
+	public void close() throws MapDatabaseException {
 		try {
-			dbc.close();
+			jdbc.close();
 		} catch (SQLException e) {
-			throw new MapFileException(e);
+			throw new MapDatabaseException(e);
 		}
 	}
 	

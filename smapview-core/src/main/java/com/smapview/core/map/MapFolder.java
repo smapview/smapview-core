@@ -13,7 +13,6 @@ public class MapFolder extends SchemaElement {
 	final String contentType;
 	
 	final FolderField folderField;
-
 	
 	private MapFolder(MapSchema schema, String name, 
 			String alias, String contentType, FolderField folderField) 
@@ -59,5 +58,5 @@ public class MapFolder extends SchemaElement {
 	void compile() throws SchemaBuildException {
 		schema.expectDeclaredType(contentType);
 	}
-
+	
 }

@@ -6,8 +6,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
@@ -18,26 +16,26 @@ class MapRegistry {
 	
 	class RegistryWriter {
 		
-		final MapFileConnection mfc;
+		final DatabaseConnection dbc;
 		
-		RegistryWriter(MapFileConnection mfc) {
-			this.mfc = mfc;
+		RegistryWriter(DatabaseConnection dbc) {
+			this.dbc = dbc;
 		}
 		
-		void insert(RegistryEntry entry) throws MapFileException {
+		void insert(RegistryEntry entry) throws MapDatabaseException {
 			// TODO complete this
 		}
 
-		void update(RegistryEntry entry) throws MapFileException {
+		void update(RegistryEntry entry) throws MapDatabaseException {
 			// TODO complete this
 		}
 		
-		void put(String key, String value) throws MapFileException {
+		void put(String key, String value) throws MapDatabaseException {
 			// TODO complete this
 		}
 
-		public void setSchema(MapSchema newSchema) throws MapFileException {
-			for (NodeType type : newSchema.listNodeTypes()) {
+		public void setSchema(MapSchema newSchema) throws MapDatabaseException {
+			for (NodeType type : newSchema.listTypes()) {
 				// case of a new type
 				if (schema.getType(type.name) == null) {
 					insert(type.toRegistryEntry());
@@ -45,6 +43,7 @@ class MapRegistry {
 				// case of a modified type
 				else if (type.modified) update(type.toRegistryEntry());
 			}
+			newSchema.publish();
 			schema = newSchema;
 		}
 
@@ -52,14 +51,14 @@ class MapRegistry {
 	
 	class RegistryReader {
 		
-		final MapFileConnection mfc;
+		final DatabaseConnection dbc;
 		
-		RegistryReader(MapFileConnection mfc) {
-			this.mfc = mfc;
+		RegistryReader(DatabaseConnection dbc) {
+			this.dbc = dbc;
 		}
 
-		RegistryEntry selectKey(String key) throws MapFileException {
-			try (PreparedStatement pst = mfc.prepare(
+		RegistryEntry selectKey(String key) throws MapDatabaseException {
+			try (PreparedStatement pst = dbc.prepare(
 					"select EVAL from REGISTRY where EKEY = ?",
 					key)) 
 			{
@@ -70,13 +69,13 @@ class MapRegistry {
 				}
 				return null;
 			} catch (SQLException e) {
-				throw new MapFileException(e);
+				throw new MapDatabaseException(e);
 			}
 		}
 
-		List<RegistryEntry> scanKeys(String keyPrefix) throws MapFileException {
+		List<RegistryEntry> scanKeys(String keyPrefix) throws MapDatabaseException {
 			List<RegistryEntry> result = new ArrayList<>();
-			try (PreparedStatement pst = mfc.prepare(
+			try (PreparedStatement pst = dbc.prepare(
 					"select EKEY, EVAL from REGISTRY where EVAL like ?",
 					keyPrefix + "%")) 
 			{
@@ -88,7 +87,7 @@ class MapRegistry {
 					result.add(new RegistryEntry(key, value)); 
 				}
 			} catch (SQLException e) {
-				throw new MapFileException(e);
+				throw new MapDatabaseException(e);
 			}
 			return result;
 		}
@@ -98,7 +97,7 @@ class MapRegistry {
 					.readValue();
 		}
 		
-		String get(String key) throws MapFileException {
+		String get(String key) throws MapDatabaseException {
 			RegistryEntry entry = selectKey(key);
 			return entry != null? ((JsonString)entry.value).getString() : null;
 		}
@@ -126,34 +125,23 @@ class MapRegistry {
 
 	}
 
-	private Map<String,MapPart> parts = new TreeMap<>();
-
 	private MapSchema schema;
 	
-	void load(MapFileConnection mfc) throws MapFileException {
-		schema = new MapSchema(newReader(mfc));
-		MapPart.readParts(newReader(mfc)).stream().forEach(p -> add(p));
+	void load(DatabaseConnection dbc) throws MapDatabaseException {
+		schema = new MapSchema(newReader(dbc));
+		schema.publish();
 	}
 	
-	void add(MapPart part) {
-		parts.put(part.path, part);
-		parts.put(part.alias, part);
+	RegistryReader newReader(DatabaseConnection dbc) {
+		return new RegistryReader(dbc);
 	}
 
-	RegistryReader newReader(MapFileConnection mfc) {
-		return new RegistryReader(mfc);
-	}
-
-	RegistryWriter newWriter(MapFileConnection mfc) {
-		return new RegistryWriter(mfc);
+	RegistryWriter newWriter(DatabaseConnection dbc) {
+		return new RegistryWriter(dbc);
 	}
 	
 	MapSchema getSchema() {
 		return schema;
 	}
-	
-	MapPart getPart(String partPath) {
-		return parts.get(partPath);
-	}
-	
+		
 }

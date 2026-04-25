@@ -37,5 +37,19 @@ public class Node {
 		}
 		else throw new IllegalArgumentException();
 	}
+	
+	static String escapeName(String nodeName) {
+		// TODO complete this
+		return nodeName;
+	}
+
+	static String unescapeName(String escapedName) {
+		// TODO complete this
+		return escapedName;
+	}
+	
+	static String buildPath(String basePath, String folderAlias, String nodeName) {
+		return basePath + "/" + folderAlias + ":" + escapeName(nodeName);
+	}
 
 }

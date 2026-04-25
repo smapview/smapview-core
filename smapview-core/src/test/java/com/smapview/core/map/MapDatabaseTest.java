@@ -8,9 +8,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import com.smapview.core.map.NodePool.PoolMode;
-
-public class MapFileTest {
+public class MapDatabaseTest {
 		
 	@TempDir
     Path tempDir;
@@ -20,7 +18,7 @@ public class MapFileTest {
 	@Test
 	public void testCreateMap() throws Exception {
 		Path path = Files.createFile(tempDir.resolve("test.smap"));
-		MapFile map = new MapFile(path.toFile());
+		MapDatabase map = new MapDatabase(path.toFile());
 		map.close();
 		printMapFolderSize();
 	}
@@ -28,9 +26,9 @@ public class MapFileTest {
 	@Test
 	public void testEmptyPart() throws Exception {
 		Path path = Files.createFile(tempDir.resolve("test.smap"));
-		MapFile map = new MapFile(path.toFile());
+		MapDatabase map = new MapDatabase(path.toFile());
 		MapView view = new MapView(map);
-		NodePool pool = view.openPool("/mypart", PoolMode.CREATE_PART);
+		NodePool pool = view.createPool("MySource");
 		pool.merge();
 		pool.close();
 		view.close();
@@ -41,40 +39,41 @@ public class MapFileTest {
 	@Test
 	public void testBuildSchema() throws Exception {
 		Path path = Files.createFile(tempDir.resolve("test.smap"));
-		MapFile map = new MapFile(path.toFile());
+		MapDatabase map = new MapDatabase(path.toFile());
 		MapView view = new MapView(map);
-		NodePool pool = view.openPool("/mybooks", PoolMode.UPDATE_PART);
-		MapSchema schema = pool.getSchema();
-		schema.builder()
-			.type("Library", "libraries")
-			.type("Author", "Library.authors")
-			.type("Book", "Library.books").link("author", "Author");
-		// use NodeBuilder to build
+		NodePool pool = view.createPool("MySource");
+		buildCarRentalSchema(pool.getSchemaBuilder());
 		pool.merge();
 		pool.close();
 		view.close();
 		map.close();
 		printMapFolderSize();
 	}
+	
+	void buildCarRentalSchema(SchemaBuilder builder) throws SchemaBuildException {
+		builder.type("CarModel", "/models")
+			.type("Agency", "/agencies")
+			.type("Car", "-/cars")
+			.link("model", "CarModel")
+			.build();		
+	}
 
 	@Test
 	public void testAddNodes() throws Exception {
 		Path path = Files.createFile(tempDir.resolve("test.smap"));
-		MapFile map = new MapFile(path.toFile());
+		MapDatabase map = new MapDatabase(path.toFile());
 		MapView view = new MapView(map);
-		NodePool pool = view.openPool("/mybooks", PoolMode.UPDATE_PART);
-		pool.builder()
-			.folder("libraries")
-				.newNode("Library", "My library")
-				.set("location", "At home")
-				.folder("authors")
-					.newNode("Author", "James Dawn")
-					.add()
-				.folder("books")
-					.newNode("Book", "The Grey Pinguin")
-					.link("author").toNode("authors/James Dawn")
-					.add()
-				.add();
+		NodePool pool = view.createPool("MySource");
+		buildCarRentalSchema(pool.getSchemaBuilder());
+		pool.newNodeBuilder("/models/Economy").build();
+		pool.newNodeBuilder("/models/Compact").build();
+		pool.newNodeBuilder("/models/Premium").build();
+		pool.newNodeBuilder("/agencies/Paris")
+			.addNode("Car", "FR-911-GZ")
+			.linkNode("model", "/models/Economy")
+			.addNode("Car", "FR-316-NF")
+			.linkNode("model", "/models/Compact")
+			.build();
 		pool.merge();
 		pool.close();
 		view.close();
