@@ -1,0 +1,42 @@
+
+type ConfigSource {
+	id: ID!
+	name: String!
+	items: [ConfigItem]
+	wrong: [HasNoPossibleType]
+	importTime: DateTime
+}
+
+interface ConfigItem {
+	id: ID!
+	name: String!
+	source: ConfigSource! @hasInverse(field: items)
+	updateTime: DateTime
+}
+
+type Server implements ConfigItem {
+	id: ID!
+	template: Template
+	networkCards: [NetworkCard]
+}
+
+type NetworkCard {
+	id: ID!
+	name: String!
+	server: Server! @hasInverse(field: "networkCards")
+	ipAddress: String
+}
+
+type Template implements ConfigItem {
+	id: ID!
+	servers: [Server] @hasInverse(field: "template")
+}
+
+type Package implements ConfigItem {
+	id: ID!
+}
+
+interface HasNoPossibleType {
+	id: ID!
+}
+
