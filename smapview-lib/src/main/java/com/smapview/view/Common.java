@@ -15,9 +15,10 @@ public class Common {
 		public void flush() {}
 		
 		@Override
-		public void publish(LogRecord record) {
-			System.out.format(record.getMessage() + System.lineSeparator(), 
-					record.getParameters());
+		synchronized public void publish(LogRecord record) {
+			System.out.format("[%s] ", record.getLevel().getName());
+			System.out.format(record.getMessage(), record.getParameters());
+			System.out.println();
 			System.out.flush();
 		}		
 	}

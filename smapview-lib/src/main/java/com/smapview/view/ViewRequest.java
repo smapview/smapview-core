@@ -27,8 +27,10 @@ class ViewRequest {
 		
 		GRAPHQL_MUTATION("\n  "),
 				
-		GRAPHQL_INPUT_OBJECT(", ");
-		
+		GRAPHQL_INPUT_OBJECT(", "),
+
+		GRAPHQL_INPUT_ARRAY(", ");
+
 		final String itemSeparator;
 		
 		Context(String itemSeparator) {
@@ -102,10 +104,6 @@ class ViewRequest {
 			printer.write("mutation {\n  ");
 			start(context);
 			break;
-		case GRAPHQL_INPUT_OBJECT:
-			printer.write("{ ");
-			start(context);
-			break;
 		case DQL_SET:
 			printer.write("{\n  set {\n    ");
 			start(context);
@@ -167,7 +165,7 @@ class ViewRequest {
 		String alias = scope().ensureIn(Context.GRAPHQL_MUTATION).newItem("_ar%03d");
 		printer.format("%s(input: [{ ", data.nodeType.toAddName());
 		start(Context.GRAPHQL_INPUT_OBJECT);
-		data.writeTo(this);
+		data.writeTo(this, NodeData.ADD_PARENT_REF);
 		end();
 		printer.format(" }]) { %s ", data.nodeType.toFieldName());
 		data.nodeType.fieldSet.writeTo(printer);
@@ -177,12 +175,25 @@ class ViewRequest {
 
 	String writeUpdate(NodeData data) {
 		String alias = scope().ensureIn(Context.GRAPHQL_MUTATION).newItem("_ur%03d");
-		// TODO complete this
+		printer.format("%s(input: { filter: { id: [\"%s\"] }, set: { ", 
+				data.nodeType.toUpdateName(), data.nodeInfo.getNodeId());
+		start(Context.GRAPHQL_INPUT_OBJECT);
+		data.writeTo(this, NodeData.SKIP_ID | NodeData.SKIP_POINTER);
+		end();
+		printer.format(" } }) { %s ", data.nodeType.toFieldName());
+		data.nodeType.fieldSet.writeTo(printer);
+		printer.write(" }");
 		return alias;
 	}
-
+	
 	void startInputObject(NodeField field) {
 		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT).newItem(field.fieldName);
+		start(Context.GRAPHQL_INPUT_OBJECT);
+		printer.write("{ ");
+	}
+
+	void startInputObject() {
+		scope().ensureIn(Context.GRAPHQL_INPUT_ARRAY).newItem();
 		start(Context.GRAPHQL_INPUT_OBJECT);
 		printer.write("{ ");
 	}
@@ -193,6 +204,20 @@ class ViewRequest {
 		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT);
 		end();
 		printer.write(" }");
+	}
+
+	void startInputArray(NodeField field) {
+		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT).newItem(field.fieldName);
+		start(Context.GRAPHQL_INPUT_ARRAY);
+		printer.write("[ ");
+	}
+
+	void endInputArray() {
+		// cannot close initial scope
+		if (stack.size() == 1) throw new IllegalArgumentException();
+		scope().ensureIn(Context.GRAPHQL_INPUT_ARRAY);
+		end();
+		printer.write(" ]");
 	}
 
 	void append(NodeField field, String[] values) {
@@ -281,8 +306,47 @@ class ViewRequest {
 	}
 
 	JsonParser execToParser() throws ViewRequestException {
-		Common.trace("GraphQL request: %s", getContent());
-		return Json.createParser(getResponse());
+		Common.trace("Sending GraphQL request: %s", getContent());
+		try (JsonParser parser = Json.createParser(getResponse())) {
+			int resultDepth = 0;
+			boolean hasErrors = false;
+			boolean hasData = false;
+			while (parser.hasNext()) {
+				JsonParser.Event event = parser.next();
+				switch(event) {
+				case KEY_NAME:
+					String keyName = parser.getString();
+					if (resultDepth == 1) {
+						if ("errors".equals(keyName)) hasErrors = true;
+						else if ("data".equals(keyName)) hasData = true;
+						else if ("extensions".equals(keyName)) parser.skipObject(); 
+					}
+					break;
+				case START_ARRAY:
+					if (hasErrors) throw new ViewRequestException(parser.getArray());
+					else if (hasData) return parser;
+					else throw new ViewRequestException("Cannot parse response: unexpected array");
+				case START_OBJECT:
+					resultDepth++;
+					switch (resultDepth) {
+					case 1:
+						break;
+					case 2:
+						if (hasData) return parser;
+					default:
+						throw new ViewRequestException("Cannot parse response: unexpected object");
+					}
+					break;
+				case END_OBJECT:
+					resultDepth--;
+					break;
+				default:
+					break;
+				}
+			}
+			throw new ViewRequestException("Cannot parse response");
+		}
+
 	}
 	
 	private String getContent() throws ViewRequestException {
@@ -297,9 +361,11 @@ class ViewRequest {
 					printer.write("\n}");
 					break;
 				case GRAPHQL_QUERY:
-				case GRAPHQL_INPUT_OBJECT:
 					printer.write(" }");
 					break;
+				default:
+					// invalid initial context
+					throw new Error();
 				}
 				printer.flush();
 				break;

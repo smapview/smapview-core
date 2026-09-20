@@ -2,12 +2,12 @@ package com.smapview.view;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
-import com.smapview.view.LinkStrategy.JoinRole;
-import com.smapview.view.NodeField.Modifier;
-import com.smapview.view.NodeField.ValueType;
+import com.smapview.view.JoinStrategy.JoinRole;
 
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
@@ -15,47 +15,50 @@ import jakarta.json.JsonValue;
 
 class NodeType {
 
-	static final Pattern IGNORED_TYPENAME = Pattern.compile(".*AggregateResult");
+	static final Pattern NAME = Pattern.compile("[A-Z][a-zA-Z_]*");
+
+	static final Pattern IGNORED_NAME = Pattern.compile(".*AggregateResult");
 	
 	final String typeName;
 		
-	final List<NodeField> fields;
+	final Map<String,NodeField> fields;
 	
 	final boolean isInterface;
 	
 	final List<NodeType> possibleTypes;
 		
-	final List<JoinRole> joinRoles = new ArrayList<JoinRole>(8);
+	private final List<JoinRole> joinRoles = new ArrayList<JoinRole>(8);
 	
 	GraphFieldSet fieldSet;
 
 	NodeType(View view, JsonObject schemaType) {
-		List<NodeField> fields = new ArrayList<>();
+		Map<String,NodeField> fields = new HashMap<>(32);
 		for (JsonValue value : schemaType.getJsonArray("fields")) {
 			JsonObject field = (JsonObject)value;
 			String name = field.getString("name");
+			if (!NAME.matcher(name).matches()) {
+				throw new IllegalArgumentException("Invalid type name: "+name);
+			}
 			JsonObject fieldType = field.getJsonObject("type");
-			String fieldTypeName = fieldType.getString("name", null);
-			if (fieldTypeName == null) {
+			String schemaTypeName = fieldType.getString("name", null);
+			if (schemaTypeName == null) {
 				JsonObject ofType = fieldType.getJsonObject("ofType");
-				fieldTypeName = ofType.getString("name");
+				schemaTypeName = ofType.getString("name");
 			}
 			String kind = fieldType.getString("kind");
-			if (IGNORED_TYPENAME.matcher(fieldTypeName).matches()) continue;
-			ValueType valueType = "ID".equals(fieldTypeName)? ValueType.ID
-					: "String".equals(fieldTypeName)? ValueType.STRING
-					: "DateTime".equals(fieldTypeName)? ValueType.DATE_TIME
-							: ValueType.NODE;
-			Modifier modifier = "NON_NULL".equals(kind)? Modifier.MANDATORY
-					: "LIST".equals(kind)? Modifier.LIST : null;
-			NodeField nodeField = valueType==ValueType.NODE? 
-					new NodeField(this, name, fieldTypeName, modifier)
-					: new NodeField(this, name, valueType, modifier);
-			if ("ID".equals(fieldTypeName)) nodeField.add(FieldTag.ID); 
-			fields.add(nodeField);
+			if (IGNORED_NAME.matcher(schemaTypeName).matches()) continue;
+			FieldTag typeTag = "ID".equals(schemaTypeName)? FieldTag.ID
+					: "String".equals(schemaTypeName)? FieldTag.STRING
+							: "DateTime".equals(schemaTypeName)? FieldTag.DATE_TIME
+									: null;
+			FieldTag modifier = "NON_NULL".equals(kind)? FieldTag.MANDATORY
+					: "LIST".equals(kind)? FieldTag.LIST : null;
+			NodeField nodeField = new NodeField(this, name, schemaTypeName, 
+					typeTag, modifier);
+			fields.put(nodeField.fieldName, nodeField);
 		}
 		this.typeName = schemaType.getString("name");
-		this.fields = Collections.unmodifiableList(fields);
+		this.fields = Collections.unmodifiableMap(fields);
 		this.isInterface = schemaType.getString("kind", "").equals("INTERFACE");
 		this.possibleTypes = listPossibleTypes(view, schemaType);
 	}
@@ -69,33 +72,7 @@ class NodeType {
 		}
 		return Collections.unmodifiableList(result);
 	}
-		
-	NodeField findField(String fieldName) {
-		return fields.stream().filter(f -> f.fieldName.equals(fieldName))
-				.findFirst().orElse(null);
-	}
-
-	NodeField getField(String fieldName) {
-		NodeField result = findField(fieldName);
-		if (result != null) return result;
-		else throw new IllegalArgumentException(
-				"Unknown field: " + typeName + "." + fieldName);
-	}
-
-	NodeField findFieldWith(FieldTag tag) {
-		return fields.stream().filter(f -> f.has(tag)).findFirst().orElse(null);
-	}
-
-	NodeField getFieldWith(FieldTag tag) {
-		NodeField field = findFieldWith(tag);
-		if (field != null) return field;
-		else throw new IllegalArgumentException("Missing "+tag+" field for "+typeName);
-	}
-
-	List<NodeField> findFieldsWith(FieldTag tag) {
-		return fields.stream().filter(f -> f.has(tag)).toList();
-	}
-	
+			
 	@Override
 	public String toString() {
 		return typeName;
@@ -130,6 +107,10 @@ class NodeType {
 		return "get" + typeName;
 	}
 
+	String toUpdateName() {
+		return "update" + typeName;
+	}
+
 	String toDeleteName() {
 		return "delete" + typeName;
 	}
@@ -144,6 +125,23 @@ class NodeType {
 
 	public NodeField getTimestampField() {
 		return fieldSet.timestampField;
+	}
+	
+	public NodeField getField(String fieldName) {
+		return fields.get(fieldName);
+	}
+	
+	void add(JoinRole role) {
+		joinRoles.add(role);
+		if (isInterface) {
+			for (NodeType ptype : possibleTypes) {
+				ptype.joinRoles.add(role);
+			}
+		}
+	}
+	
+	Iterable<JoinRole> getJoinRoles() {
+		return joinRoles;
 	}
 
 }

@@ -3,6 +3,7 @@ package com.smapview.view;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -37,12 +38,17 @@ class GraphFieldSet {
 	
 	GraphFieldSet(NodeType type) throws GraphSchemaException {
 		this.type = type;
-		idField = type.findFieldWith(FieldTag.ID);
-		pointerField = type.findFieldWith(FieldTag.POINTER);
-		timestampField = type.findFieldWith(FieldTag.TIMESTAMP);
+		idField = findFieldWith(FieldTag.ID);
+		pointerField = findFieldWith(FieldTag.POINTER);
+		timestampField = findFieldWith(FieldTag.TIMESTAMP);
 		baseFields = Arrays.asList(idField, pointerField, timestampField)
 				.stream().filter(f -> f != null).toList();
 		for (NodeField field : baseFields) addRole(field);
+	}
+	
+	NodeField findFieldWith(FieldTag tag) {
+		return type.fields.values().stream()
+				.filter(f -> f.has(tag)).findFirst().orElse(null);
 	}
 		
 	void addPath(NodeField pathField, GraphFieldSet pathFieldSet) throws GraphSchemaException {
@@ -140,7 +146,7 @@ class GraphFieldSet {
 		writer.append(field.fieldName);
 		if (field.has(FieldTag.PATH)) {
 			writer.append(" ");
-			field.valueNodeType.fieldSet.writeTo(writer);
+			field.getValueNodeType().fieldSet.writeTo(writer);
 		}
 	}
 	
@@ -154,27 +160,41 @@ class GraphFieldSet {
 		return false;
 	}
 	
-	Iterable<GraphFieldSet> listFragments() {
+	Collection<GraphFieldSet> listFragments() {
 		return fragments;
 	}
 
-	Iterable<NodeField> listPathFields() {
-		return paths.keySet();
+	Collection<Entry<NodeField,GraphFieldSet>> listPaths() {
+		return paths.entrySet();
 	}
 
-	GraphFieldSet getPathFieldSet(String fieldName) {
+	Entry<NodeField,GraphFieldSet> getPath(String pathField) {
 		for (Entry<NodeField,GraphFieldSet> e : paths.entrySet()) {
-			if (e.getKey().fieldName.equals(fieldName)) return e.getValue(); 
+			if (e.getKey().fieldName.equals(pathField)) return e; 
 		}
 		for (GraphFieldSet fragment : fragments) {
-			GraphFieldSet found = fragment.getPathFieldSet(fieldName);
+			Entry<NodeField,GraphFieldSet> found = fragment.getPath(pathField);
 			if (found != null) return found;
 		}
 		return null;
+	}
+	
+	GraphFieldSet getPathFieldSet(String pathField) {
+		Entry<NodeField,GraphFieldSet> path = getPath(pathField);
+		return path != null? path.getValue() : null;
 	}
 	
 	Map<String,FieldRole> listFieldRoles() {
 		return Collections.unmodifiableMap(fieldRoles);
 	}
 	
+	NodeField getDefaultPathTo(NodeType nodeType) {
+		List<NodeField> list = paths.keySet().stream() 
+				.filter(f -> f.isAssignableFrom(nodeType)).toList();
+		switch (list.size()) {
+		case 0: throw new IllegalArgumentException("No path to " + nodeType);
+		case 1: return list.getFirst();
+		default: throw new IllegalArgumentException("Multiple paths to " + nodeType);
+		}
+	}
 }

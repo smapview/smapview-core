@@ -4,10 +4,9 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.smapview.view.JoinValueSubscription.Subscriber;
 import com.smapview.view.ViewUpdate.LinkSpace;
 
-class NodeInfo extends Subscriber {
+class NodeInfo {
 
 	enum NodeFlag {
 		
@@ -26,25 +25,20 @@ class NodeInfo extends Subscriber {
 	}
 	
 	static final List<NodeInfo> NO_CHILD = Arrays.asList();
-	
+		
 	final NodeInfo parentNode;
 
-	String nodeId;
-
-	long updateTime;
+	long timestamp;
 
 	private byte flags = 0;
 			
 	private List<NodeInfo> childNodes;
 	
+	private LinkEndpoint endpoint = new LinkEndpoint(getLinkScope());;
+	
 	NodeInfo(NodeInfo parentNode) {
 		this.parentNode = parentNode;
 		if (parentNode != null) parentNode.addChild(this);
-	}
-
-	@Override
-	NodeInfo getNodeInfo() {
-		return this;
 	}
 	
 	private void addChild(NodeInfo node) {
@@ -60,7 +54,6 @@ class NodeInfo extends Subscriber {
 		return (this.flags & flag.value) != 0; 
 	}
 
-	@Override
 	List<LinkSpace> getLinkScope() {
 		if (parentNode != null) return parentNode.getLinkScope();
 		else throw new UnsupportedOperationException();
@@ -69,5 +62,13 @@ class NodeInfo extends Subscriber {
 	List<NodeInfo> listChildNodes() {
 		return childNodes != null? childNodes : NO_CHILD;
 	}
-
+	
+	String getNodeId() {
+		return endpoint.nodeId;
+	}
+	
+	void setNodeId(String nodeId) {
+		endpoint.nodeId = nodeId;
+	}
+	
 }

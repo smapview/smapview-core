@@ -5,6 +5,7 @@
   <groupId>com.smapview</groupId>
   <artifactId>smapview-lib</artifactId>
   <version>0.0.1-SNAPSHOT</version>
+  <packaging>jar</packaging>
   <name>SmapView core library</name>
   <properties>
     <maven.compiler.target>21</maven.compiler.target>

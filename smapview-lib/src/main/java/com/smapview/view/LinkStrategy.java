@@ -1,62 +1,53 @@
 package com.smapview.view;
 
-import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
-class LinkStrategy {
+public class LinkStrategy {
 
-	enum RoleType {
-		SOURCE,
-		TARGET
-	}
-
-	class JoinRole {
-
-		final RoleType roleType;
-		
-		final NodeField joinField;
-		
-		final NodeField linkField;
-		
-		JoinRole(RoleType roleType, NodeField joinField, 
-				NodeField linkField, Map<String,NodeType> typeMap) 
-		{
-			this.roleType = roleType;
-			this.joinField = joinField;
-			this.linkField = linkField;
-		}
-		
-		LinkStrategy getStrategy() {
-			return LinkStrategy.this;
-		}
-		
-		JoinRole getJoiningRole() {
-			return roleType == RoleType.SOURCE? target : source;
-		}
-
-	}
-		
-	final LinkScope linkScope;
+	final View view;
 	
-	final JoinRole source;
-
-	final JoinRole target;
-
-	final List<JoinRole> joinRoles;
-
-	LinkStrategy(NodeField linkField, NodeField inverseLinkField, 
-			NodeField sourceJoinField, NodeField targetJoinField, 
-			LinkScope linkScope, Map<String,NodeType> typeMap) 
-	{
-		this.linkScope = linkScope;
-		this.source = new JoinRole(RoleType.SOURCE, sourceJoinField, linkField, typeMap);
-		this.target = new JoinRole(RoleType.TARGET, targetJoinField, inverseLinkField, typeMap); 
-		this.joinRoles = Arrays.asList(source, target);
+	final NodeField linkField;
+	
+	final List<JoinStrategy> joinStrategies = new LinkedList<>();
+	
+	LinkStrategy(View view, NodeField linkField, NodeField inverseField) {
+		this.view = view;
+		this.linkField = linkField;
+		Common.trace("Creating new link strategy for %s, inverse %s", linkField, inverseField);
+		linkField.markAsLink(inverseField, view);
 	}
 	
-	JoinRole getJoinRole(RoleType roleType) {
-		return roleType == RoleType.SOURCE? source : target;
+	/**
+	 * Link the nodes based on join values.
+	 * <p>
+	 * Target nodes provide join values that can be used by source nodes as references to target 
+	 * nodes. Target join values get computed from a value expression and source join values are
+	 * provided as input data set on the link field.
+	 * <p>
+	 * @param valueExpr  The expression used to compute join values on target nodes.  
+	 * @param linkScope  Tells what scope to use when resolving links (graph or spaces).
+	 */
+	public void withSingleJoin(String valueExpr, LinkScope linkScope) {
+		// TODO complete this
 	}
-		
+
+	/**
+	 * Link the nodes based on join key values.
+	 * <p>
+	 * When the resolved link is defined on an interface, this method can be used to compute
+	 * join values on a specific type implementing this interfaces.
+	 * For example if type <code>Post</code> implements interface <code>Authored</code> then one 
+	 * can use this method to provide values for link <code>Authored.by</code> as references to 
+	 * <code>Post.authorEmail</code>.
+	 * <p>
+	 * @param keyName     The key name, used as a prefix in join values associated with that key.  
+	 * @param targetType  The target node type associated with the join key.
+	 * @param valueExpr   The expression used to compute join values on target nodes.
+	 * @param linkScope   Tells what scope to use when resolving links (graph or spaces).
+	 */
+	public void withJoinKey(String keyName, String targetType, String valueExpr, LinkScope linkScope) {
+		joinStrategies.add(new JoinStrategy(this, keyName, targetType, valueExpr, linkScope));
+	}
+	
 }

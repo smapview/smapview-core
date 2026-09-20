@@ -33,18 +33,7 @@ public class GraphBuilder implements AutoCloseable {
 		if (field.has(FieldTag.PATH)) return field;
 		else throw new IllegalArgumentException("Not a path field: "+field);
 	}
-	
-	private NodeField findDefaultPathTo(NodeType nodeType) {
-		List<NodeField> list = getCurrentNode()
-				.nodeType.findFieldsWith(FieldTag.PATH).stream() 
-				.filter(f -> f.valueNodeType.canBeCreatedWith(nodeType)).toList();
-		switch (list.size()) {
-		case 0: throw new IllegalArgumentException("No path to " + nodeType);
-		case 1: return list.getFirst();
-		default: throw new IllegalArgumentException("Multiple paths to " + nodeType);
-		}
-	}
-	
+		
 	public GraphBuilder path(String pathField) {
 		if (nodeStack.isEmpty()) throw new IllegalStateException();
 		buildPath = getPathField(pathField);
@@ -63,16 +52,22 @@ public class GraphBuilder implements AutoCloseable {
 		}
 		else {
 			if (buildPath != null) {
-				if (!buildPath.valueNodeType.canBeCreatedWith(resolvedType)) {
+				if (!buildPath.getValueNodeType().canBeCreatedWith(resolvedType)) {
 					throw new GraphBuilderException("Invalid node type for selected path");
 				}
 			}
-			else buildPath = findDefaultPathTo(resolvedType);
+			else {
+				buildPath = getCurrentNode().nodeType.fieldSet.getDefaultPathTo(resolvedType);
+			}
 			NodeData currentNode = getCurrentNode();
-			checkPointer(currentNode);
+			if (!currentNode.hasPointer()) {
+				throw new GraphBuilderException("Parent pointer field not set: " + 
+						currentNode.nodeType.fieldSet.pointerField);
+			}
 			NodeData childNode = new NodeData(resolvedType);
 			childNode.parentPath = buildPath;
 			childNode.parentType = currentNode.nodeType;
+			currentNode.add(buildPath, childNode);
 			nodeStack.push(childNode);
 			buildPath = null;
 		}
@@ -118,25 +113,22 @@ public class GraphBuilder implements AutoCloseable {
 			throw new IllegalStateException();
 		case 1:
 		case 2:
-			NodeData data = getCurrentNode();
-			checkPointer(data);
-			mapToGraph(getRootInfo(), "/", data);
-			addToBatch(data);
+			try {
+				NodeData data = getCurrentNode();
+				data.checkMandatoryFields();
+				mapToGraph(getRootInfo(), "/" + data.parentPath.fieldName, data);
+				collectJoinValues(data);
+				addToBatch(data);
+			}
+			catch (IllegalStateException e) {
+				throw new GraphBuilderException(e.getMessage());
+			}
 			break;
 		}
 		nodeStack.pop();
 		return this;
 	}
-	
-	private void checkPointer(NodeData data) 
-			throws GraphBuilderException 
-	{
-		NodeField pointerField = data.nodeType.getPointerField();
-		data.nodePointer = data.unsafeGet(pointerField);
-		if (data.nodePointer == null) throw new GraphBuilderException(
-				"Missing value for pointer field: " + pointerField);
-	}
-		
+			
 	@Override
 	public void close() 
 			throws Exception 
@@ -163,12 +155,12 @@ public class GraphBuilder implements AutoCloseable {
 			throws GraphBuilderException 
 	{
 		if (nodeData.nodeInfo != baseNode) {
-			String nodePath = basePath + "/" + nodeData.nodePointer;
-			nodeData.nodeInfo = update.nodeMap.get(nodePath);
+			String nodePath = basePath + "/" + nodeData.getPointer();
+			nodeData.nodeInfo = update.getNodeInfo(nodePath);
 			if (nodeData.nodeInfo == null) {
 				nodeData.nodeInfo = new NodeInfo(baseNode);
 				nodeData.nodeInfo.add(NodeFlag.NEW, NodeFlag.BUILDING);
-				update.nodeMap.put(nodePath, nodeData.nodeInfo);
+				update.mapNode(nodePath, nodeData.nodeInfo);
 			} else if (nodeData.nodeInfo.parentNode == baseNode) {
 				nodeData.nodeInfo.add(NodeFlag.BUILDING);
 			} else {
@@ -191,5 +183,9 @@ public class GraphBuilder implements AutoCloseable {
 		if (nodeStack.isEmpty()) throw new IllegalStateException();
 		else return update.getOrCreateRoot(nodeStack.getFirst());			
 	}
-		
+	
+	private void collectJoinValues(NodeData date) {
+		// TODO complete this
+	}
+			
 }

@@ -3,54 +3,65 @@ package com.smapview.view;
 enum FieldTag {
 
 	/**
-	 * Marks a node identifier field.
-	 * <p>
-	 * Node identifier fields are automatically tagged based on GraphQL introspection.
-	 * They must be of GraphQL ID type and declared as non-null in the GraphQL schema.
+	 * Marks a node identifier field (GraphQL ID type).
 	 */
-	ID,
+	ID(0x0001),
+	
+	/**
+	 * Marks a string field (GraphQL String type).
+	 */
+	STRING(0x0002),
+	
+	/**
+	 * Marks a date-and-time field (GraphQL DateTime type).
+	 */
+	DATE_TIME(0x0004),
+	
+	/**
+	 * Marks a list field (GraphQL list type).
+	 */
+	LIST(0x0010),
+	
+	/**
+	 * Marks a mandatory field (GraphQL non-null type).
+	 */
+	MANDATORY(0x0020),
 	
 	/**
 	 * Marks a field to be used as path to other nodes in view graphs.
-	 * 
-	 * @see View#tagPathField(String, String)
 	 */
-	PATH,
-	
-	/**
-	 * Marks a join field used in a link strategy.
-	 * 
-	 * Fields get automatically marked with this tag through calls to 
-	 * {@link View#addLinkStrategy(String, String, String, String, LinkScope)
-	 */
-	JOIN,
+	PATH(0x0100),
 	
 	/**
 	 * Marks a link field used in a link strategy.
-	 * 
-	 * Fields get automatically marked with this tag through calls to 
-	 * {@link View#addLinkStrategy(String, String, String, String, LinkScope)
 	 */
-	LINK,
+	LINK(0x0200),
 	
+	/**
+	 * Marks a reverse link or path field.
+	 */
+	REVERSE(0x0400),
+		
 	/**
 	 * Marks a node pointer field.
 	 * <p>
 	 * Pointer values are provided in node data during graph updates to uniquely identify 
 	 * child nodes from their parent node and path field.   
-	 *  
-	 * @see View#tagPointerField(String)
 	 */
-	POINTER,
+	POINTER(0x1000),
 
 	/**
 	 * Marks a node timestamp field.
 	 * <p>
 	 * Node timestamps are provided in node data during graph updates to indicate when
 	 * the node data was changed in the data source.
-	 *  
-	 * @see View#tagTimestampField(String)
 	 */
-	TIMESTAMP
+	TIMESTAMP(0x2000);
+	
+	final int value;
+	
+	FieldTag(int value) {
+		this.value = value;
+	}
 
 }

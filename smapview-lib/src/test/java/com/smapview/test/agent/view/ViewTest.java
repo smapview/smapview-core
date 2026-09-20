@@ -32,8 +32,8 @@ public class ViewTest {
 	void tagPathFields() throws Exception {
 		View view = new View("http://localhost:8080");
 		view.setRootType("ConfigSource");
-		view.tagPathField("ConfigSource.items", "ConfigItem.source");
-		view.tagPathField("Server.networkCards", "NetworkCard.server");
+		view.addPathField("ConfigSource.items", "ConfigItem.source");
+		view.addPathField("Server.networkCards", "NetworkCard.server");
 		assertEquals(6, view.getTypeMap().size());
 	}
 
