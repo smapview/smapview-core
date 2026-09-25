@@ -64,10 +64,10 @@ class GraphFieldSet {
 	}
 
 	private void addRole(NodeField field) throws GraphSchemaException {
-		if (field.has(FieldTag.ID)) addRole(field, FieldRole.ID);
-		else if (field.has(FieldTag.POINTER)) addRole(field, FieldRole.POINTER);
-		else if (field.has(FieldTag.TIMESTAMP)) addRole(field, FieldRole.TIMESTAMP);
-		else if (field.has(FieldTag.PATH)) addRole(field, FieldRole.PATH);
+		if (field.isId()) addRole(field, FieldRole.ID);
+		else if (field.isPointer()) addRole(field, FieldRole.POINTER);
+		else if (field.isTimestamp()) addRole(field, FieldRole.TIMESTAMP);
+		else if (field.isPath()) addRole(field, FieldRole.PATH);
 		else throw new IllegalArgumentException();
 	}
 
@@ -144,7 +144,7 @@ class GraphFieldSet {
 	private void append(PrintWriter writer, NodeField field, int fieldPos) {
 		if (fieldPos > 0) writer.append(", ");
 		writer.append(field.fieldName);
-		if (field.has(FieldTag.PATH)) {
+		if (field.isPath()) {
 			writer.append(" ");
 			field.getValueNodeType().fieldSet.writeTo(writer);
 		}

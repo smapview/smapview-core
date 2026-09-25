@@ -29,6 +29,8 @@ public class View {
 
 	final private Map<String,NodeType> typeMap = new HashMap<>();
 	
+	final private List<JoinStrategy> joinStrategies = new ArrayList<>(24);
+
 	final URI graphqlEndpoint;
 	
 	final URI mutateEndpoint;
@@ -40,7 +42,7 @@ public class View {
 	private NodeType rootType;
 	
 	private ViewUpdate update;
-		
+			
 	public View(String dgraphHttpUrl) throws ViewRequestException {
 		this.graphqlEndpoint = URI.create(dgraphHttpUrl + "/graphql");
 		this.mutateEndpoint = URI.create(dgraphHttpUrl + "/mutate");
@@ -147,7 +149,7 @@ public class View {
 	public NodeType getNodeType(String typeName) {
 		NodeType result = typeMap.get(typeName);
 		if (result == null) throw new IllegalArgumentException(
-				"Cannot find view node type: "+typeName);
+				"Cannot find view node type: " + typeName);
 		return result;
 	}
 		
@@ -157,7 +159,7 @@ public class View {
 
 	NodeType getType(String name) throws GraphSchemaException {
 		NodeType type = typeMap.get(name);
-		if (type == null) throw new GraphSchemaException("Unknown type: "+name);
+		if (type == null) throw new GraphSchemaException("Unknown type: " + name);
 		else return type;
 	}
 	
@@ -172,9 +174,12 @@ public class View {
 		GraphFieldSet fieldSet = new GraphFieldSet(type);
 		for (NodeField field : type.fields.values()) {
 			field.prepareForInput();
-			if (field.has(FieldTag.PATH)) {
+			if (field.isPath()) {
 				fieldSet.addPath(field, 
 						buildFieldSet(field.getValueNodeType(), visitedTypes));
+			}
+			if (field.isLink() && field.getLinkStrategy().joinStrategies.isEmpty()) {
+				throw new GraphSchemaException("Missing join for link field: " + field);
 			}
 		}
 		if (type.isInterface) {
@@ -185,10 +190,10 @@ public class View {
 		}
 		else {
 			if (fieldSet.idField == null) {
-				throw new GraphSchemaException("Missing ID field for "+type);
+				throw new GraphSchemaException("Missing ID field for " + type);
 			}
 			if (fieldSet.pointerField == null) {
-				throw new GraphSchemaException("Missing pointer field for "+type);
+				throw new GraphSchemaException("Missing pointer field for " + type);
 			}
 		}
 		return fieldSet;
@@ -216,6 +221,15 @@ public class View {
 
 	ViewRequest newDqlSet() {
 		return new ViewRequest(this, Context.DQL_SET);
+	}
+	
+	short register(JoinStrategy js) {
+		joinStrategies.add(js);
+		return (short)joinStrategies.size();
+	}
+	
+	JoinStrategy getJoinStrategy(short joinId) {
+		return joinStrategies.get(joinId - 1);
 	}
 
 }

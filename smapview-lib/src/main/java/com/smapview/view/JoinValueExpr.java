@@ -112,16 +112,15 @@ public class JoinValueExpr {
 
 		FieldExpr(String field1, String field2) {
 			if (field2 == null) {
-				this.path = null;
-				this.value = context.getField(field1);				
+				path = null;
+				value = context.getField(field1);				
 			}
 			else {
-				this.path = context.getField(field1);
-				if (this.path == null)
+				path = context.getField(field1);
+				if (path == null)
 					throw new IllegalArgumentException("Unknown path field: " + path);
-				else if (this.path.has(FieldTag.PATH)) ;
-				else if (this.path.has(FieldTag.REVERSE) 
-						&& this.path.getInverseField().has(FieldTag.PATH)) ;
+				else if (path.isPath()) ;
+				else if (path.isReverse() && path.getInverseField().isPath()) ;
 				else throw new IllegalArgumentException("Invalid path field: " + path);
 				this.value = path.getValueNodeType().getField(field2);
 			}

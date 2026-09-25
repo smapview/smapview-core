@@ -68,6 +68,8 @@ class NodeField {
 	private NodeType valueNodeType;
 
 	private NodeField inverseField;	
+	
+	private LinkStrategy linkStrategy;
 
 	NodeField(NodeType type, String fieldName, String schemaBaseType, FieldTag... tags) {
 		this.fieldName = fieldName;
@@ -118,19 +120,21 @@ class NodeField {
 		}
 	}
 
-	void markAsLink(NodeField inverseField, View view) {
+	void markAsLink(LinkStrategy linkStrategy, NodeField inverseField, View view) {
 		if (hasAny(FieldTag.ID, FieldTag.STRING, FieldTag.DATE_TIME)) {
 			throwInvalidTypeFor("link");
 		}
 		else {
+			this.linkStrategy = linkStrategy;
 			setInverse(inverseField, view);
 			add(FieldTag.LINK);
 			if (declaringType.isInterface) {
 				for (NodeType type : declaringType.possibleTypes) {
 					NodeField same = type.getField(fieldName);
-					same.add(FieldTag.LINK);
+					same.linkStrategy = linkStrategy;
 					same.inverseField = inverseField;
 					same.valueNodeType = valueNodeType;
+					same.add(FieldTag.LINK);
 				}
 			}
 		}
@@ -197,6 +201,30 @@ class NodeField {
 		return has(FieldTag.LIST);
 	}
 
+	boolean isId() {
+		return has(FieldTag.ID);
+	}
+
+	boolean isLink() {
+		return has(FieldTag.LINK);
+	}
+
+	boolean isPath() {
+		return has(FieldTag.PATH);
+	}
+
+	boolean isReverse() {
+		return has(FieldTag.REVERSE);
+	}
+
+	boolean isPointer() {
+		return has(FieldTag.POINTER);
+	}
+
+	boolean isTimestamp() {
+		return has(FieldTag.TIMESTAMP);
+	}
+
 	void writeValueTo(Object inputValue, ViewRequest request) {
 		inputWriter.writeTo(this, inputValue, request);
 	}
@@ -240,6 +268,10 @@ class NodeField {
 	
 	boolean isAssignableFrom(NodeType type) {
 		return valueNodeType != null && valueNodeType.canBeCreatedWith(type);
+	}
+
+	public LinkStrategy getLinkStrategy() {
+		return linkStrategy;
 	}
 
 }

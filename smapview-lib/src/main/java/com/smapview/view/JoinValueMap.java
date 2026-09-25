@@ -9,33 +9,56 @@ import com.smapview.view.JoinStrategy.JoinRole;
 
 public class JoinValueMap {
 
+		
+	static class JoinValue {
+		
+		final String value;
+		
+		final short joinId;
+		
+		public JoinValue(String value, short joinId) {
+			this.value = value;
+			this.joinId = joinId;
+		}
+
+		@Override
+		public int hashCode() {
+			int result = 17; 
+		    result = 31 * result + value.hashCode();
+		    result = 31 * result + joinId;
+		    return result;
+		}
+		
+		@Override
+		public boolean equals(Object object) {
+			JoinValue jval = (JoinValue)object;
+			return value.equals(jval.value)
+					&& joinId == jval.joinId;
+		}
 	
-	class JoinValue {
+	}
+			
+	static class JoinValueBinder {
 		
 		final List<LinkEndpoint> source = new LinkedList<>();
 
 		final List<LinkEndpoint> target = new LinkedList<>();
 		
 	}
-	
-	final JoinStrategy strategy;
-	
-	private final Map<String,JoinValue> map = new HashMap<>(100000);
 
-	public JoinValueMap(JoinStrategy strategy) {
-		this.strategy = strategy;
-	}
+	private final Map<JoinValue,JoinValueBinder> map = new HashMap<>(100000);
 	
 	void addJoinValue(LinkEndpoint endpoint, JoinRole role, String value) {
 		// not synchronized, so a synchronized JoinValueMap subclass may
 		// be required to accommodate for graph parallel updates
-		JoinValue jval = null;
-		if (jval == null) {
-			jval = new JoinValue();
-			map.put(value, jval);
+		JoinValue jval = new JoinValue(value, role.getStrategy().joinId);
+		JoinValueBinder binder = map.get(jval);
+		if (binder == null) {
+			binder = new JoinValueBinder();
+			map.put(jval, binder);
 		}
-		if (role.isTarget()) jval.target.add(endpoint);
-		else jval.source.add(endpoint);
+		if (role.isTarget()) binder.target.add(endpoint);
+		else binder.source.add(endpoint);
 	}
 		
 	void clear() {

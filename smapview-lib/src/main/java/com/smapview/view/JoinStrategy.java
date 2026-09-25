@@ -2,7 +2,7 @@ package com.smapview.view;
 
 
 class JoinStrategy {
-
+	
 	class JoinRole {
 
 		JoinStrategy getStrategy() {
@@ -26,6 +26,8 @@ class JoinStrategy {
 	final JoinValueExpr valueExpr;
 	
 	final LinkScope linkScope;
+	
+	final short joinId;
 		
 	JoinStrategy(LinkStrategy linkStrategy, String keyName, String targetType, 
 			String valueExpr, LinkScope linkScope) 
@@ -37,6 +39,11 @@ class JoinStrategy {
 		this.linkScope = linkScope;
 		linkStrategy.linkField.declaringType.add(source);
 		this.valueExpr.context.add(target);
+		this.joinId = linkStrategy.view.register(this);
+	}
+	
+	JoinStrategy getJoinStrategy() {
+		return linkStrategy.view.getJoinStrategy(joinId);
 	}
 			
 }

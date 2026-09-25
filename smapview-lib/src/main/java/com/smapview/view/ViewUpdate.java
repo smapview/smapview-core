@@ -1,9 +1,8 @@
 package com.smapview.view;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+
 
 /**
  * Entry point for view updates.
@@ -22,29 +21,16 @@ public class ViewUpdate {
 	
 	final View view;
 	
-	final private Map<JoinStrategy,JoinValueMap> joinValues = new HashMap<>(32);
+	final JoinValueMap joinValues = new JoinValueMap();
 	
 	final List<LinkSpace> linkSpaces = new ArrayList<>();
 	
 	final List<GraphUpdate> graphUpdates = new ArrayList<>();
 	
-	final Map<LinkStrategy,LinkUpdater> linkUpdaters; 
-		
 	boolean completed = false;
 		
 	ViewUpdate(View view) {
 		this.view = view;
-		this.linkUpdaters = new HashMap<>(view.linkStrategies.size());
-		// prepare for link updates on each link strategy
-		// and build join value maps to resolve inter-graph links
-		for (LinkStrategy strategy : view.linkStrategies) {
-			linkUpdaters.put(strategy, new LinkUpdater(strategy)); 
-			for (JoinStrategy js : strategy.joinStrategies) {
-				if (js.linkScope == LinkScope.SPACES) {
-					joinValues.put(js, new JoinValueMap(js));
-				}
-			}			
-		}
 	}
 
 	/**
@@ -53,7 +39,9 @@ public class ViewUpdate {
 	 * @throws ViewUpdateException
 	 */
 	synchronized public void complete() throws ViewUpdateException {
-		// TODO implement this
+		LinkUpdater linkUpdater = new LinkUpdater(joinValues,
+				view, LinkScope.SPACES);
+		linkUpdater.updateLinks();
 		completed = true;
 	}
 	

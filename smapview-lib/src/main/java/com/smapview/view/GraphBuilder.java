@@ -30,7 +30,7 @@ public class GraphBuilder implements AutoCloseable {
 	
 	private NodeField getPathField(String pathField) {
 		NodeField field = getCurrentNode().nodeType.getField(pathField);
-		if (field.has(FieldTag.PATH)) return field;
+		if (field.isPath()) return field;
 		else throw new IllegalArgumentException("Not a path field: "+field);
 	}
 		
@@ -107,6 +107,11 @@ public class GraphBuilder implements AutoCloseable {
 	private static void safeSet(NodeData data, NodeField field, Object value) 
 			throws GraphBuilderException 
 	{
+		if (field.isLink()) {
+			LinkStrategy ls = field.getLinkStrategy();
+			if (field.isList()) ls.checkSourceJoinValues((String[])value);
+			else ls.checkSourceJoinValues((String)value);
+		}
 		try {
 			data.set(field, value);
 		}
@@ -179,7 +184,7 @@ public class GraphBuilder implements AutoCloseable {
 				throw new GraphBuilderException("Duplicate node reference");
 			}
 			for (NodeField nodeField : nodeData.getFields()) {
-				if (nodeField.has(FieldTag.PATH)) {
+				if (nodeField.isPath()) {
 					List<NodeData> list = nodeData.unsafeGet(nodeField);
 					if (list != null) for (NodeData childNodeData : list) {
 						mapToGraph(nodeData.nodeInfo, 

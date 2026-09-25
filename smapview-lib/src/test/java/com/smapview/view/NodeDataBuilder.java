@@ -37,7 +37,7 @@ public class NodeDataBuilder {
 	NodeDataBuilder add(String pathField, String typeName) throws GraphBuilderException {
 		NodeType type = view.getNodeType(typeName);
 		NodeField path = get().nodeType.getField(pathField);
-		if (path == null || ! path.has(FieldTag.PATH)) {
+		if (path == null || ! path.isPath()) {
 			throw new IllegalArgumentException("Invalid path field: " + pathField);
 		}
 		NodeData child = new NodeData(type);

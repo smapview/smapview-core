@@ -88,19 +88,11 @@ class GraphUpdate {
 
 	private final Map<String, NodeInfo> nodeMap = new HashMap<>(20000);
 	
-	final private Map<JoinStrategy,JoinValueMap> joinValues = new HashMap<>(32);
+	private final JoinValueMap joinValues = new JoinValueMap();
 	
 	GraphUpdate(ViewUpdate viewUpdate) throws ViewRequestException {
 		this.context = viewUpdate;
 		this.builder = new GraphBuilder(this);
-		// build join value maps to resolve intra-graph links
-		for (LinkStrategy linkStrategy : context.view.linkStrategies) {
-			for (JoinStrategy strategy : linkStrategy.joinStrategies) {
-				if (strategy.linkScope == LinkScope.GRAPH) {
-					joinValues.put(strategy, new JoinValueMap(strategy));
-				}
-			}
-		}
 	}
 
 	synchronized boolean hasBuilder() {
@@ -121,9 +113,7 @@ class GraphUpdate {
 
 	synchronized void builderClosed() {
 		if (builder != null) {
-			for (JoinValueMap map : joinValues.values()) {
-				map.clear();
-			}
+			joinValues.clear();
 			nodeMap.clear();
 			builder = null;
 		}
@@ -131,12 +121,9 @@ class GraphUpdate {
 
 	synchronized void buildComplete() {
 		if (builder != null) {
-			for (JoinValueMap map : joinValues.values()) {
-				context.linkUpdaters
-				.get(map.strategy.linkStrategy)
-				.consume(map);
-				map.clear();
-			}
+			LinkUpdater linkUpdater = new LinkUpdater(joinValues,
+					context.view, LinkScope.GRAPH);
+			linkUpdater.updateLinks();
 			nodeMap.clear();
 			builder = null;
 		}

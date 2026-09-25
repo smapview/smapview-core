@@ -1,16 +1,18 @@
 package com.smapview.view;
 
 import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 class LinkUpdater {
-
-	final Map<JoinStrategy,JoinValueMap> consumedMaps = new HashMap<>(8);
+	
+	final JoinValueMap source;
+	
+	final View view;
+	
+	final List<LinkStrategy> scope;
 
 	final HashMap<Link,LinkStatus> linkStatus = new HashMap<>(100000);
 
-	final LinkStrategy linkStrategy;	
-	
 	class Link {
 		
 		String fromNodeId;
@@ -28,8 +30,8 @@ class LinkUpdater {
 		@Override
 		public boolean equals(Object object) {
 			Link link = (Link)object;
-			return link.fromNodeId.equals(fromNodeId)
-					&& toNodeId.equals(toNodeId);
+			return fromNodeId.equals(link.fromNodeId)
+					&& toNodeId.equals(link.toNodeId);
 		}
 				
 	}
@@ -54,25 +56,16 @@ class LinkUpdater {
 		
 	}
 
-	LinkUpdater(LinkStrategy linkStrategy) {
-		this.linkStrategy = linkStrategy;
-		for (JoinStrategy js : linkStrategy.joinStrategies) {
-			consumedMaps.put(js, null);
-		}
+	LinkUpdater(JoinValueMap source, View view, LinkScope scope) {
+		this.source = source;
+		this.view = view;
+		this.scope = view.linkStrategies.stream()
+				.filter(s -> s.getScope() == scope).toList();
 	}
 	
-	void consume(JoinValueMap map) {
+	void updateLinks() {
 		// TODO complete this
-		map.clear();
-		consumedMaps.put(map.strategy, map);
-		for (JoinStrategy js : linkStrategy.joinStrategies) {
-			if (! consumedMaps.containsKey(js)) return; 
-		}
-		updateLinks();
+		source.clear();
 	}
 	
-	private void updateLinks() {
-		// TODO complete this
-	}
-
 }

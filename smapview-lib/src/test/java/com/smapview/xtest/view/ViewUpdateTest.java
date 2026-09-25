@@ -10,6 +10,7 @@ import com.smapview.view.Common;
 import com.smapview.view.GraphBuilder;
 import com.smapview.view.GraphBuilderException;
 import com.smapview.view.GraphSchemaException;
+import com.smapview.view.LinkScope;
 import com.smapview.view.TestViewBuilder;
 import com.smapview.view.View;
 import com.smapview.view.ViewRequestException;
@@ -77,7 +78,8 @@ public class ViewUpdateTest {
 		view.addPathField("ConfigSource.items", "ConfigItem.source");
 		view.addPointerField("ConfigSource.name");
 		view.addPointerField("ConfigItem.name");
-		view.addLinkField("Server.template", "Template.servers");
+		view.addLinkField("Server.template", "Template.servers")
+		.withSingleJoin("name", LinkScope.GRAPH);
 		ViewUpdate update = view.startUpdate();
 		try (GraphBuilder builder = update.startGraphUpdate()) {
 			addRoot(builder);
