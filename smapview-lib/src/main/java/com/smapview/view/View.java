@@ -118,9 +118,13 @@ public class View {
 		if (m.matches()) {
 			String typeName = m.group(1);
 			String fieldName = m.group(2);
-			return mapNodeType(typeName).getField(fieldName);
+			NodeField result = mapNodeType(typeName).getField(fieldName);
+			if (result == null) throw new IllegalArgumentException(
+					"Cannot find field: " + qualifiedFieldName);
+			else return result;
 		}
-		else throw new IllegalArgumentException("Not a qualified field name: "+qualifiedFieldName);
+		else throw new IllegalArgumentException(
+				"Not a qualified field name: " + qualifiedFieldName);
 	}
 
 	/**

@@ -119,19 +119,29 @@ class GraphUpdate {
 			throw new IllegalStateException();
 	}
 
-	synchronized void builderClosed(boolean complete) {
+	synchronized void builderClosed() {
 		if (builder != null) {
-			if (complete) {
-				for (JoinValueMap map : joinValues.values()) {
-					context.linkUpdaters
-					.get(map.strategy.linkStrategy)
-					.consume(map);
-				}
+			for (JoinValueMap map : joinValues.values()) {
+				map.clear();
 			}
+			nodeMap.clear();
 			builder = null;
 		}
 	}
-	
+
+	synchronized void buildComplete() {
+		if (builder != null) {
+			for (JoinValueMap map : joinValues.values()) {
+				context.linkUpdaters
+				.get(map.strategy.linkStrategy)
+				.consume(map);
+				map.clear();
+			}
+			nodeMap.clear();
+			builder = null;
+		}
+	}
+
 	void setLinkSpaces(String... spaceNames) {
 		linkScope = Collections.unmodifiableList(context.selectLinkSpaces(spaceNames));
 	}

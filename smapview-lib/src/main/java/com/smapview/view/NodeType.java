@@ -36,7 +36,7 @@ class NodeType {
 		for (JsonValue value : schemaType.getJsonArray("fields")) {
 			JsonObject field = (JsonObject)value;
 			String name = field.getString("name");
-			if (!NAME.matcher(name).matches()) {
+			if (!NodeField.NAME.matcher(name).matches()) {
 				throw new IllegalArgumentException("Invalid type name: "+name);
 			}
 			JsonObject fieldType = field.getJsonObject("type");

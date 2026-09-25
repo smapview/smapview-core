@@ -34,10 +34,11 @@ class NodeInfo {
 			
 	private List<NodeInfo> childNodes;
 	
-	private LinkEndpoint endpoint = new LinkEndpoint(getLinkScope());;
+	private LinkEndpoint endpoint;
 	
 	NodeInfo(NodeInfo parentNode) {
 		this.parentNode = parentNode;
+		this.endpoint = new LinkEndpoint(getLinkScope());
 		if (parentNode != null) parentNode.addChild(this);
 	}
 	

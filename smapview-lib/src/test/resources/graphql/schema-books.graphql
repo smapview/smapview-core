@@ -1,0 +1,22 @@
+
+type Library {
+	id: ID!
+	name: String!
+	books: [Book] @hasInverse(field: "library")
+}
+
+type Book {
+	id: ID!
+	title: String!
+	authors: [String]
+	category: String
+	library: Library!
+	quotes: [Quote] @hasInverse(field: "book")
+}
+
+type Quote {
+	id: ID!
+	text: String!
+	topics: [String]
+	book: Book!
+}

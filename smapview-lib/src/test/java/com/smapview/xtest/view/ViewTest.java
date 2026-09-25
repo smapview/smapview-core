@@ -1,4 +1,4 @@
-package com.smapview.test.agent.view;
+package com.smapview.xtest.view;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -7,6 +7,7 @@ import java.util.logging.Level;
 import org.junit.jupiter.api.Test;
 
 import com.smapview.view.Common;
+import com.smapview.view.TestViewBuilder;
 import com.smapview.view.View;
 
 public class ViewTest {
@@ -17,20 +18,20 @@ public class ViewTest {
 	
 	@Test
 	void createViewEndpoint() throws Exception {
-		View view = new View("http://localhost:8080");
+		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
 		assertEquals(0, view.getTypeMap().size());
 	}
 
 	@Test
 	void setRootType() throws Exception {
-		View view = new View("http://localhost:8080");
+		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
 		view.setRootType("ConfigSource");
 		assertEquals(1, view.getTypeMap().size());
 	}
 
 	@Test
-	void tagPathFields() throws Exception {
-		View view = new View("http://localhost:8080");
+	void addPathFields() throws Exception {
+		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
 		view.setRootType("ConfigSource");
 		view.addPathField("ConfigSource.items", "ConfigItem.source");
 		view.addPathField("Server.networkCards", "NetworkCard.server");

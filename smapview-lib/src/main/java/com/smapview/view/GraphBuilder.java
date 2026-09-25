@@ -77,7 +77,11 @@ public class GraphBuilder implements AutoCloseable {
 	public GraphBuilder set(String field, String value) 
 			throws GraphBuilderException 
 	{
-		return safeSet(field, value);
+		NodeData data = getCurrentNode();
+		NodeField sfield = data.nodeType.getField(field);
+		if (sfield.isList()) safeSet(data, sfield, new String[] { value });
+		else safeSet(data, sfield, value);
+		return this;
 	}
 
 	public GraphBuilder set(String field, String[] values) 
@@ -96,9 +100,15 @@ public class GraphBuilder implements AutoCloseable {
 			throws GraphBuilderException 
 	{
 		NodeData data = getCurrentNode();
+		safeSet(data, data.nodeType.getField(field), value);
+		return this;
+	}
+
+	private static void safeSet(NodeData data, NodeField field, Object value) 
+			throws GraphBuilderException 
+	{
 		try {
-			data.set(data.nodeType.getField(field), value);
-			return this;
+			data.set(field, value);
 		}
 		catch (IllegalArgumentException e) {
 			throw new GraphBuilderException(e.getMessage());
@@ -112,6 +122,8 @@ public class GraphBuilder implements AutoCloseable {
 		case 0 : 
 			throw new IllegalStateException();
 		case 1:
+			update.buildComplete();
+			break;
 		case 2:
 			try {
 				NodeData data = getCurrentNode();
@@ -133,7 +145,7 @@ public class GraphBuilder implements AutoCloseable {
 	public void close() 
 			throws Exception 
 	{
-		update.builderClosed(false);
+		update.builderClosed();
 	}
 	
 	NodeData getCurrentNode() {

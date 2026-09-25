@@ -31,10 +31,10 @@ class NodeData {
 	
 	void set(NodeField field, Object value) throws GraphBuilderException {
 		// check value type
-		if (value == null) throw new NullPointerException();
-		else if (!field.isValidInput(value)) {
+		if (field == null || value == null) throw new NullPointerException();
+		else if (! field.isValidInput(value)) {
 			throw new GraphBuilderException("Invalid value for " +
-					field.getGraphqlType() + " field");
+					field.getGraphqlType() + " field " + field);
 		}
 		else unsafeSet(field, value);
 	}
@@ -84,9 +84,7 @@ class NodeData {
 		// write other fields
 		for (Map.Entry<NodeField, Object> fval : fieldValues.entrySet()) {
 			NodeField field = fval.getKey();
-			if ((! field.has(FieldTag.POINTER)) 
-					&& (! field.fieldName.startsWith("_"))) 
-			{
+			if (! field.hasAny(FieldTag.POINTER, FieldTag.LINK)) {
 				field.writeValueTo(fval.getValue(), request);
 			}
 		}
