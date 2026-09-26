@@ -19,7 +19,13 @@ public class ViewRequestException extends Exception {
 	}
 	
 	static String toExceptionMessage(JsonArray errors) {
-		return "GraphQL request returned " + errors.size() + " error(s)";
+		try {
+			return "Request returned an error: " + 
+					errors.getJsonObject(0).getString("message");
+		}
+		catch (Exception e) {
+			return "Request returned " + errors.size() + " error(s)";
+		}
 	}
 
 }

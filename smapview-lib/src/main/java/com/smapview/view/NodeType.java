@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import com.smapview.view.JoinStrategy.JoinRole;
-
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
@@ -27,7 +25,7 @@ class NodeType {
 	
 	final List<NodeType> possibleTypes;
 		
-	private final List<JoinRole> joinRoles = new ArrayList<JoinRole>(8);
+	private final List<JoinValueExpr> jvexList = new ArrayList<>(8);
 	
 	GraphFieldSet fieldSet;
 
@@ -131,17 +129,17 @@ class NodeType {
 		return fields.get(fieldName);
 	}
 	
-	void add(JoinRole role) {
-		joinRoles.add(role);
+	void add(JoinValueExpr jvex) {
+		jvexList.add(jvex);
 		if (isInterface) {
 			for (NodeType ptype : possibleTypes) {
-				ptype.joinRoles.add(role);
+				ptype.jvexList.add(jvex);
 			}
 		}
 	}
 	
-	Iterable<JoinRole> getJoinRoles() {
-		return joinRoles;
+	Iterable<JoinValueExpr> getJoinValueExprs() {
+		return jvexList;
 	}
 
 }

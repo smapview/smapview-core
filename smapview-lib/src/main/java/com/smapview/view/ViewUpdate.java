@@ -2,12 +2,16 @@ package com.smapview.view;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+
+import com.smapview.view.LinkUpdater.Link;
+import com.smapview.view.LinkUpdater.LinkContext;
 
 
 /**
  * Entry point for view updates.
  */
-public class ViewUpdate {
+public class ViewUpdate implements LinkContext {
 	
 	class LinkSpace {
 		
@@ -37,10 +41,10 @@ public class ViewUpdate {
 	 * Completes this update.
 	 * 
 	 * @throws ViewUpdateException
+	 * @throws ViewRequestException 
 	 */
-	synchronized public void complete() throws ViewUpdateException {
-		LinkUpdater linkUpdater = new LinkUpdater(joinValues,
-				view, LinkScope.SPACES);
+	synchronized public void complete() throws ViewUpdateException, ViewRequestException {
+		LinkUpdater linkUpdater = new LinkUpdater(joinValues, this);
 		linkUpdater.updateLinks();
 		completed = true;
 	}
@@ -76,6 +80,21 @@ public class ViewUpdate {
 			selectedSpaces.add(space);
 		}
 		return selectedSpaces;
+	}
+
+	@Override
+	public View getView() {
+		return view;
+	}
+
+	@Override
+	public boolean isGlobalContext() {
+		return true;
+	}
+
+	@Override
+	public void queryExistingLinks(Consumer<Link> action) {
+		// TODO Auto-generated method stub
 	}
 
 }

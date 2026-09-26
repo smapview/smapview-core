@@ -11,6 +11,8 @@ import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
 import java.util.Stack;
 
+import com.smapview.view.LinkUpdater.Link;
+
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
@@ -266,17 +268,32 @@ class ViewRequest {
 		printer.write("\"");
 	}
 
-	void append(String nodeId, NodeField field, String value) {
-		scope().ensureIn(Context.DQL_SET).newItem();
+	void writeSet(Link link, boolean isGlobal) {
+		scope().ensureIn(Context.DQL_SET);
+		NodeField linkField = view.getLinkStrategy(link.linkId).linkField;
+		String format = isGlobal? "<%s> <%s> <%s> (gc=true) ."
+				: "<%s> <%s> <%s> (gc=false) .";
+		scope().newItem();
+		printer.format(format, link.fromNodeId,
+				linkField.toString(),
+				link.toNodeId);
+		scope().newItem();
+		printer.format(format, link.toNodeId,
+				linkField.getInverseField().toString(),
+				link.fromNodeId);
 	}
 	
 	InputStream getResponse() throws ViewRequestException {
-		HttpRequest request = HttpRequest.newBuilder()
-				.uri(selectEndpoint())
+		URI endpoint = selectEndpoint();
+		String content = getContent();
+		String contentType = getContentType();
+		HttpRequest request = HttpRequest.newBuilder().uri(endpoint)
 				.timeout(Duration.ofSeconds(10))
-				.header("Content-Type", "application/graphql")
-				.POST(BodyPublishers.ofString(getContent()))
+				.header("Content-Type", contentType)
+				.POST(BodyPublishers.ofString(content))
 				.build();
+		Common.trace("Using endpoint %s to execute request: %s", 
+				endpoint, content);
 		try {
 			return view.client.send(request, BodyHandlers.ofInputStream()).body();
 		} catch (IOException | InterruptedException e) {
@@ -285,11 +302,11 @@ class ViewRequest {
 	}
 
 	JsonValue exec() throws ViewRequestException {
-		Common.trace("Sending GraphQL request: %s", getContent());
 		try (InputStream stream = getResponse()) {
 			JsonObject result = Json.createReader(stream).readObject();
 			JsonArray errors = result.getJsonArray("errors");
 			JsonValue data = result.get("data");
+			Common.trace("Got request result: %s", result);
 			if (errors == null || errors.isEmpty()) return data;
 			else throw new ViewRequestException(errors);
 		} catch (IOException e) {
@@ -306,7 +323,6 @@ class ViewRequest {
 	}
 
 	JsonParser execToParser() throws ViewRequestException {
-		Common.trace("Sending GraphQL request: %s", getContent());
 		try (JsonParser parser = Json.createParser(getResponse())) {
 			int resultDepth = 0;
 			boolean hasErrors = false;
@@ -377,6 +393,23 @@ class ViewRequest {
 			content = buffer.toString();
 		}
 		return content;
+	}
+	
+	int getItemCount() {
+		return stack.peek().itemCount;
+	}
+
+	String getContentType() {
+		switch (initialContext) {
+		case GRAPHQL_INPUT_OBJECT:
+		case GRAPHQL_MUTATION:
+		case GRAPHQL_QUERY:
+			return "application/graphql";
+		case DQL_SET:
+			return "application/rdf";
+		default:
+			throw new Error();
+		}
 	}
 
 }

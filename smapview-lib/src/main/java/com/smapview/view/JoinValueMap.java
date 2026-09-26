@@ -4,41 +4,12 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
-import com.smapview.view.JoinStrategy.JoinRole;
 
-public class JoinValueMap {
-
-		
-	static class JoinValue {
-		
-		final String value;
-		
-		final short joinId;
-		
-		public JoinValue(String value, short joinId) {
-			this.value = value;
-			this.joinId = joinId;
-		}
-
-		@Override
-		public int hashCode() {
-			int result = 17; 
-		    result = 31 * result + value.hashCode();
-		    result = 31 * result + joinId;
-		    return result;
-		}
-		
-		@Override
-		public boolean equals(Object object) {
-			JoinValue jval = (JoinValue)object;
-			return value.equals(jval.value)
-					&& joinId == jval.joinId;
-		}
-	
-	}
+class JoinValueMap {
 			
-	static class JoinValueBinder {
+	static class ValueBinder {
 		
 		final List<LinkEndpoint> source = new LinkedList<>();
 
@@ -46,24 +17,40 @@ public class JoinValueMap {
 		
 	}
 
-	private final Map<JoinValue,JoinValueBinder> map = new HashMap<>(100000);
+	private final Map<JoinValue,ValueBinder> map = new HashMap<>(100000);
 	
-	void addJoinValue(LinkEndpoint endpoint, JoinRole role, String value) {
+	private void bind(LinkEndpoint endpoint, JoinValue value, boolean asTarget) {
 		// not synchronized, so a synchronized JoinValueMap subclass may
 		// be required to accommodate for graph parallel updates
-		JoinValue jval = new JoinValue(value, role.getStrategy().joinId);
-		JoinValueBinder binder = map.get(jval);
+		ValueBinder binder = map.get(value);
 		if (binder == null) {
-			binder = new JoinValueBinder();
-			map.put(jval, binder);
+			binder = new ValueBinder();
+			map.put(value, binder);
 		}
-		if (role.isTarget()) binder.target.add(endpoint);
+		if (asTarget) binder.target.add(endpoint);
 		else binder.source.add(endpoint);
+		Common.trace("Bound %s endpoint to join value %s", 
+				asTarget? "target" : "source", value);
 	}
-		
+	
+	void bindSource(LinkEndpoint endpoint, JoinValue value) {
+		bind(endpoint, value, false);
+	}
+
+	void bindTarget(LinkEndpoint endpoint, JoinValue value) {
+		bind(endpoint, value, true);
+	}
+
 	void clear() {
 		map.clear();
 	}
-
+	
+	void forEach(BiConsumer<JoinValue,ValueBinder> action) {
+		map.forEach(action);
+	}
+	
+	int size() {
+		return map.size();
+	}
 
 }

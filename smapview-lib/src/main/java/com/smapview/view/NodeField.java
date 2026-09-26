@@ -240,9 +240,10 @@ class NodeField {
 	
 	void prepareForInput() {
 		inputType = has(FieldTag.DATE_TIME)? Date.class
-				: hasAny(FieldTag.STRING, FieldTag.LINK)? 
+				: hasAny(FieldTag.STRING)? 
 						(has(FieldTag.LIST)? String[].class : String.class)
-						: has(FieldTag.PATH)? List.class : null;	
+						: has(FieldTag.PATH)? List.class 
+								: has(FieldTag.LINK)? JoinValue[].class : null;	
 		inputWriter = has(FieldTag.DATE_TIME)? DATE_TIME_WRITER 
 				: has(FieldTag.STRING)? 
 						(has(FieldTag.LIST)? STRING_ARRAY_WRITER : STRING_WRITER)

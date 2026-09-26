@@ -334,9 +334,17 @@ public class JoinValueExpr {
 
 	final ValidExpr validExpr;
 	
+	final short joinId;
+	
 	JoinValueExpr(String expr, NodeType context) {
+		this(expr, context, (short)0);
+	}
+
+	JoinValueExpr(String expr, NodeType context, short joinId) {
 		this.context = context;
 		this.validExpr = createParser().parseSkipping(Character::isWhitespace, expr);
+		this.joinId = joinId;
+		context.add(this);
 	}
 
 	static Function createFunction(String functionName, List<Object> functionArgs) {

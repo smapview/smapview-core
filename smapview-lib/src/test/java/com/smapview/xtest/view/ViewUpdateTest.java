@@ -10,7 +10,8 @@ import com.smapview.view.Common;
 import com.smapview.view.GraphBuilder;
 import com.smapview.view.GraphBuilderException;
 import com.smapview.view.GraphSchemaException;
-import com.smapview.view.LinkScope;
+import com.smapview.view.JoinScope;
+import com.smapview.view.TestView;
 import com.smapview.view.TestViewBuilder;
 import com.smapview.view.View;
 import com.smapview.view.ViewRequestException;
@@ -73,13 +74,13 @@ public class ViewUpdateTest {
 
 	@Test
 	void nodesWithLinks() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
+		TestView view = TestViewBuilder.newBuilder().setSchema("servers").build();
 		view.setRootType("ConfigSource");
 		view.addPathField("ConfigSource.items", "ConfigItem.source");
 		view.addPointerField("ConfigSource.name");
 		view.addPointerField("ConfigItem.name");
 		view.addLinkField("Server.template", "Template.servers")
-		.withSingleJoin("name", LinkScope.GRAPH);
+		.withSingleJoin("name", JoinScope.GRAPH);
 		ViewUpdate update = view.startUpdate();
 		try (GraphBuilder builder = update.startGraphUpdate()) {
 			addRoot(builder);
@@ -88,6 +89,8 @@ public class ViewUpdateTest {
 			complete(builder);
 			update.complete();
 		}
+		view.execGraphQL("{ queryServer { name, template { name } } }")
+		.checkValues("template.name", "Ubuntu 16", "Ubuntu 18");
 	}
 	
 	void addRoot(GraphBuilder builder) throws GraphBuilderException {

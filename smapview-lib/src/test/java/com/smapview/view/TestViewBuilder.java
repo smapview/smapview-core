@@ -29,8 +29,8 @@ public class TestViewBuilder {
 		return new TestViewBuilder();
 	}
 	
-	public View build() throws ViewRequestException {
-		return new View(baseUrl);
+	public TestView build() throws ViewRequestException {
+		return new TestView(baseUrl);
 	}
 
 	public TestViewBuilder setSchema(String name) throws IOException, InterruptedException {

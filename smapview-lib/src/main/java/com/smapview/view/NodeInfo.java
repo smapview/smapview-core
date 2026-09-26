@@ -72,4 +72,8 @@ class NodeInfo {
 		endpoint.nodeId = nodeId;
 	}
 	
+	LinkEndpoint asEndpoint() {
+		return endpoint;
+	}
+	
 }

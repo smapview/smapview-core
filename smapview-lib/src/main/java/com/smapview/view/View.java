@@ -25,10 +25,10 @@ public class View {
 			+ "fields { name, type { name, kind, ofType { name } } } "
 			+ "} }";
 	
-	final List<LinkStrategy> linkStrategies = new ArrayList<>();
-
 	final private Map<String,NodeType> typeMap = new HashMap<>();
 	
+	final private List<LinkStrategy> linkStrategies = new ArrayList<>();
+
 	final private List<JoinStrategy> joinStrategies = new ArrayList<>(24);
 
 	final URI graphqlEndpoint;
@@ -45,7 +45,7 @@ public class View {
 			
 	public View(String dgraphHttpUrl) throws ViewRequestException {
 		this.graphqlEndpoint = URI.create(dgraphHttpUrl + "/graphql");
-		this.mutateEndpoint = URI.create(dgraphHttpUrl + "/mutate");
+		this.mutateEndpoint = URI.create(dgraphHttpUrl + "/mutate?commitNow=true");
 		this.client = HttpClient.newHttpClient();
 		loadSchemaTypes();
 	}
@@ -98,9 +98,7 @@ public class View {
 	 * @return A link strategy used to resolve links during graph updates. 
 	 */
 	public LinkStrategy addLinkField(String linkField, String inverseField) {
-		LinkStrategy result = new LinkStrategy(this, getNodeField(linkField), getNodeField(inverseField));
-		linkStrategies.add(result);
-		return result;
+		return new LinkStrategy(this, getNodeField(linkField), getNodeField(inverseField));
 	}
 	
 	public void addPathField(String pathField, String inverseField) {
@@ -222,7 +220,21 @@ public class View {
 	ViewRequest newDqlSet() {
 		return new ViewRequest(this, Context.DQL_SET);
 	}
+
+	ViewRequest newDqlDelete() {
+		// TODO implement this
+		throw new UnsupportedOperationException();
+	}
+
+	short register(LinkStrategy ls) {
+		linkStrategies.add(ls);
+		return (short)linkStrategies.size();
+	}
 	
+	LinkStrategy getLinkStrategy(short linkId) {
+		return linkStrategies.get(linkId - 1);
+	}
+
 	short register(JoinStrategy js) {
 		joinStrategies.add(js);
 		return (short)joinStrategies.size();
@@ -230,6 +242,10 @@ public class View {
 	
 	JoinStrategy getJoinStrategy(short joinId) {
 		return joinStrategies.get(joinId - 1);
+	}
+
+	public List<LinkStrategy> getLinkStrategies() {
+		return linkStrategies;
 	}
 
 }

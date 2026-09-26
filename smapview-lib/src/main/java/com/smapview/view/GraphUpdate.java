@@ -6,8 +6,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.function.Consumer;
 
 import com.smapview.view.GraphFieldSet.FieldRole;
+import com.smapview.view.LinkUpdater.Link;
+import com.smapview.view.LinkUpdater.LinkContext;
 import com.smapview.view.NodeInfo.NodeFlag;
 import com.smapview.view.ViewUpdate.LinkSpace;
 
@@ -18,7 +21,7 @@ import jakarta.json.stream.JsonParser;
 /**
  * Groups all operations to update a single node tree graph.
  */
-class GraphUpdate {
+class GraphUpdate implements LinkContext {
 
 	class RootInfo extends NodeInfo {
 
@@ -119,10 +122,9 @@ class GraphUpdate {
 		}
 	}
 
-	synchronized void buildComplete() {
+	synchronized void buildComplete() throws ViewRequestException {
 		if (builder != null) {
-			LinkUpdater linkUpdater = new LinkUpdater(joinValues,
-					context.view, LinkScope.GRAPH);
+			LinkUpdater linkUpdater = new LinkUpdater(joinValues, this);
 			linkUpdater.updateLinks();
 			nodeMap.clear();
 			builder = null;
@@ -231,6 +233,46 @@ class GraphUpdate {
 	
 	NodeInfo getNodeInfo(String nodePath) {
 		return nodeMap.get(nodePath);
+	}
+
+	@Override
+	public View getView() {
+		return context.view;
+	}
+
+	@Override
+	public boolean isGlobalContext() {
+		return false;
+	}
+
+	@Override
+	public void queryExistingLinks(Consumer<Link> action) {
+		// TODO Auto-generated method stub
+	}
+
+	void collectJoinValues(NodeData data, NodeData parent) {
+		LinkEndpoint endpoint = data.nodeInfo.asEndpoint();
+		// bind as source to data-set join values 
+		for (NodeField field : data.getFields()) {
+			if (field.isLink()) {
+				JoinValue[] values = data.unsafeGet(field);
+				for (JoinValue jval : values) {
+					joinValues.bindSource(endpoint, jval);
+				}
+			}
+			else if (field.isPath()) {
+				List<NodeData> list = data.unsafeGet(field);
+				for (NodeData childData : list) {
+					collectJoinValues(childData, data); 
+				}
+			}
+		}
+		// bind as target based on join value expressions
+		for (JoinValueExpr jvex : data.nodeType.getJoinValueExprs()) {
+			for (String strVal : jvex.eval(data, parent)) {
+				joinValues.bindTarget(endpoint, new JoinValue(strVal, jvex.joinId));
+			}
+		}
 	}
 
 }

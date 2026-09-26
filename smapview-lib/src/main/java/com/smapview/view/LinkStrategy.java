@@ -9,6 +9,8 @@ public class LinkStrategy {
 	
 	final NodeField linkField;
 	
+	final short linkId;
+	
 	final List<JoinStrategy> joinStrategies = new LinkedList<>();
 	
 	JoinStrategy singleJoin;
@@ -18,6 +20,7 @@ public class LinkStrategy {
 		this.linkField = linkField;
 		Common.trace("Creating new link strategy for %s, inverse %s", linkField, inverseField);
 		linkField.markAsLink(this, inverseField, view);
+		this.linkId = view.register(this);
 	}
 	
 	/**
@@ -28,16 +31,16 @@ public class LinkStrategy {
 	 * provided as input data set on the link field.
 	 * <p>
 	 * @param valueExpr  The expression used to compute join values on target nodes.  
-	 * @param linkScope  Tells what scope to use when resolving links (graph or spaces).
+	 * @param joinScope  Tells what scope to use when resolving links (graph or spaces).
 	 */
-	public void withSingleJoin(String valueExpr, LinkScope linkScope) {
+	public void withSingleJoin(String valueExpr, JoinScope joinScope) {
 		if (! joinStrategies.isEmpty()) {
 			throw new IllegalStateException("Join already defined");
 		}
 		else {
 			this.singleJoin = new JoinStrategy(this, null, 
 					linkField.getValueNodeType().typeName,
-					valueExpr, linkScope);
+					valueExpr, joinScope);
 			joinStrategies.add(singleJoin);
 		}
 	}
@@ -54,38 +57,16 @@ public class LinkStrategy {
 	 * @param keyName     The key name, used as a prefix in join values associated with that key.  
 	 * @param targetType  The target node type associated with the join key.
 	 * @param valueExpr   The expression used to compute join values on target nodes.
-	 * @param linkScope   Tells what scope to use when resolving links (graph or spaces).
+	 * @param joinScope   Tells what scope to use when resolving links (graph or spaces).
 	 */
-	public void withJoinKey(String keyName, String targetType, String valueExpr, LinkScope linkScope) {
+	public void withJoinKey(String keyName, String targetType, String valueExpr, JoinScope joinScope) {
 		if (singleJoin != null) {
 			throw new IllegalStateException("Single join already defined");
 		}
 		else if (joinStrategies.stream().anyMatch(j -> keyName.equals(j.keyName))) {
 			throw new IllegalStateException("Join key already used: " + keyName);
 		}
-		else joinStrategies.add(new JoinStrategy(this, keyName, targetType, valueExpr, linkScope));
+		else joinStrategies.add(new JoinStrategy(this, keyName, targetType, valueExpr, joinScope));
 	}
-	
-	void checkSourceJoinValues(String... values) {
-		if (singleJoin == null) loopValues: for (String jval : values) {
-			for (JoinStrategy js : joinStrategies) {
-				if (jval.length() > js.keyName.length()
-						&& jval.startsWith(js.keyName)
-						&& jval.charAt(js.keyName.length()) == ':')
-				{
-					continue loopValues;
-				}
-			}
-			throw new IllegalArgumentException(
-					"Join value not matching any join key: " + jval);
-		}
-	}
-	
-	LinkScope getScope() {
-		for (JoinStrategy js : joinStrategies) {
-			if (js.linkScope == LinkScope.SPACES) return LinkScope.SPACES;
-		}
-		return LinkScope.GRAPH;
-	}
-	
+			
 }

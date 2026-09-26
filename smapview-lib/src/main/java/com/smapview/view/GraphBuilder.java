@@ -108,16 +108,39 @@ public class GraphBuilder implements AutoCloseable {
 			throws GraphBuilderException 
 	{
 		if (field.isLink()) {
-			LinkStrategy ls = field.getLinkStrategy();
-			if (field.isList()) ls.checkSourceJoinValues((String[])value);
-			else ls.checkSourceJoinValues((String)value);
+			if (field.isList()) data.set(field, toJoinValues(field, (String[])value));
+			else data.set(field, toJoinValues(field, (String)value));
 		}
-		try {
+		else try {
 			data.set(field, value);
 		}
 		catch (IllegalArgumentException e) {
 			throw new GraphBuilderException(e.getMessage());
 		}
+	}
+	
+	static JoinValue[] toJoinValues(NodeField linkField, String... values) {
+		JoinValue[] result = new JoinValue[values.length];
+		LinkStrategy ls = linkField.getLinkStrategy();
+		if (ls.singleJoin != null) for (int i=0; i<values.length; i++) {
+			result[i] = new JoinValue(values[i], ls.singleJoin.joinId);
+		}
+		else loopValues: for (int i=0; i<values.length; i++) {
+			String strVal = values[i];
+			for (JoinStrategy js : ls.joinStrategies) {
+				if (strVal.length() > (js.keyName.length() + 1)
+						&& strVal.startsWith(js.keyName)
+						&& strVal.charAt(js.keyName.length()) == ':')
+				{
+					String joinKey = strVal.substring(js.keyName.length() + 1);
+					result[i] = new JoinValue(joinKey, js.joinId);
+					continue loopValues;
+				}
+				else throw new IllegalArgumentException(
+						"Value not matching any join key: " + strVal);
+			}
+		}
+		return result;
 	}
 
 	public GraphBuilder endNode() 
@@ -134,7 +157,7 @@ public class GraphBuilder implements AutoCloseable {
 				NodeData data = getCurrentNode();
 				data.checkMandatoryFields();
 				mapToGraph(getRootInfo(), "/" + data.parentPath.fieldName, data);
-				collectJoinValues(data);
+				update.collectJoinValues(data, nodeStack.getFirst());
 				addToBatch(data);
 			}
 			catch (IllegalStateException e) {
@@ -200,9 +223,5 @@ public class GraphBuilder implements AutoCloseable {
 		if (nodeStack.isEmpty()) throw new IllegalStateException();
 		else return update.getOrCreateRoot(nodeStack.getFirst());			
 	}
-	
-	private void collectJoinValues(NodeData date) {
-		// TODO complete this
-	}
-			
+				
 }
