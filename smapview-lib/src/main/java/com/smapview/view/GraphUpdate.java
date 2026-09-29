@@ -153,26 +153,40 @@ class GraphUpdate implements LinkContext {
 			GraphFieldSet fieldSet, JsonObject fieldSetData) throws ViewRequestException 
 	{
 		Common.trace("Reading node info, base path = %s, data = %s", basePath, fieldSetData);
-		// TODO find other pointers as fieldSet.pointerField may be null on abstract type
-		String pointer = fieldSetData.getString(fieldSet.pointerField.fieldName);
+		// collect main node attributes: id, pointer and timestamp
+		String id = null, pointer = null;
+		long timestamp = 0;
+		for (String key : fieldSetData.keySet()) {
+			FieldRole role = fieldSet.getFieldRole(key);
+			if (role != null) switch (role) {
+			case ID:
+				id = fieldSetData.getString(key);
+				break;
+			case TIMESTAMP:
+				timestamp = Common.parseTime(fieldSetData.getString(key));
+				break;
+			case POINTER:
+				pointer = fieldSetData.getString(key);
+				break;
+			default:
+				break;
+			}
+		}
+		if (pointer == null) throw new ViewRequestException("Missing node info: pointer");
+		if (id == null) throw new ViewRequestException("Missing node info: id");
 		String path = basePath + "/" + pointer;
 		NodeInfo info = nodeMap.get(path);
 		if (info == null) {
 			info = new NodeInfo(baseNode);
 			mapNode(path, info);
 		}
+		info.timestamp = timestamp;
+		info.setNodeId(id);
+		Common.trace("Mapped node %s to path %s", info.getNodeId(), path);
+		// explore child nodes
 		for (String key : fieldSetData.keySet()) {
 			FieldRole role = fieldSet.getFieldRole(key);
-			Common.trace("Reading %s field-set data key %s with role %s", 
-					fieldSet.type, key, role);
 			if (role != null) switch (role) {
-			case ID:
-				info.setNodeId(fieldSetData.getString(key));
-				Common.trace("Mapped node %s to path %s", info.getNodeId(), path);
-				break;
-			case TIMESTAMP:
-				info.timestamp = Common.parseTime(fieldSetData.getString(key));
-				break;
 			case PATH:
 				GraphFieldSet childFieldSet = fieldSet.getPathFieldSet(key);
 				if (childFieldSet == null) {
