@@ -1,76 +1,96 @@
 package com.smapview.view;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
 
-class NodeType {
+class NodeType extends FieldType {
 
 	static final Pattern NAME = Pattern.compile("[A-Z][a-zA-Z_]*");
-
-	static final Pattern IGNORED_NAME = Pattern.compile(".*AggregateResult");
 	
-	final String typeName;
+	private final Map<String,NodeField> fields = new HashMap<>(32);
+	
+	private final List<NodeType> possibleTypes = new LinkedList<>();;
 		
-	final Map<String,NodeField> fields;
+	private final List<JoinValueExpr> jvexList = new LinkedList<>();
 	
-	final boolean isInterface;
-	
-	final List<NodeType> possibleTypes;
-		
-	private final List<JoinValueExpr> jvexList = new ArrayList<>(8);
+	private boolean excluded = false;
 	
 	GraphFieldSet fieldSet;
 
-	NodeType(View view, JsonObject schemaType) {
-		Map<String,NodeField> fields = new HashMap<>(32);
-		for (JsonValue value : schemaType.getJsonArray("fields")) {
-			JsonObject field = (JsonObject)value;
-			String name = field.getString("name");
-			if (!NodeField.NAME.matcher(name).matches()) {
-				throw new IllegalArgumentException("Invalid type name: "+name);
-			}
-			JsonObject fieldType = field.getJsonObject("type");
-			String schemaTypeName = fieldType.getString("name", null);
-			if (schemaTypeName == null) {
-				JsonObject ofType = fieldType.getJsonObject("ofType");
-				schemaTypeName = ofType.getString("name");
-			}
-			String kind = fieldType.getString("kind");
-			if (IGNORED_NAME.matcher(schemaTypeName).matches()) continue;
-			FieldTag typeTag = "ID".equals(schemaTypeName)? FieldTag.ID
-					: "String".equals(schemaTypeName)? FieldTag.STRING
-							: "DateTime".equals(schemaTypeName)? FieldTag.DATE_TIME
-									: null;
-			FieldTag modifier = "NON_NULL".equals(kind)? FieldTag.MANDATORY
-					: "LIST".equals(kind)? FieldTag.LIST : null;
-			NodeField nodeField = new NodeField(this, name, schemaTypeName, 
-					typeTag, modifier);
-			fields.put(nodeField.fieldName, nodeField);
+	NodeType(FieldType baseType, ViewBuilder builder) {
+		super(baseType.schemaType, builder);
+		if (! NAME.matcher(typeName).matches()) {
+			throw new IllegalArgumentException("Invalid node type name: " + typeName);
 		}
-		this.typeName = schemaType.getString("name");
-		this.fields = Collections.unmodifiableMap(fields);
-		this.isInterface = schemaType.getString("kind", "").equals("INTERFACE");
-		this.possibleTypes = listPossibleTypes(view, schemaType);
 	}
 	
-	static private List<NodeType> listPossibleTypes(View view, JsonObject schemaType) {
-		JsonArray types = schemaType.getJsonArray("possibleTypes");
-		List<NodeType> result = new ArrayList<>();
-		for (JsonValue value : types) {
-			String ptypeName = ((JsonObject)value).getString("name");
-			result.add(view.mapNodeType(ptypeName));
+	static boolean canCreateFrom(FieldType type) {
+		switch (type.kind) {
+		case UNION:
+		case INTERFACE:
+		case OBJECT:
+			return true;
+		default:
+			return false;
 		}
-		return Collections.unmodifiableList(result);
 	}
-			
+	
+	boolean isAbstract() {
+		return kind != Kind.OBJECT;
+	}
+	
+	@Override
+	boolean isVisible() {
+		return super.isVisible() && ! excluded;
+	}
+	
+	boolean hasFields() {
+		return ! fields.isEmpty();
+	}
+	
+	void exclude() {
+		this.excluded = true;
+	}
+	
+	void completeWith(ViewBuilder builder) {
+		if (fields.isEmpty()) {
+			Common.trace("Completing node type %s from %s", typeName, schemaType);
+			for (JsonValue value : schemaType.getJsonArray("fields")) {
+				JsonObject field = (JsonObject)value;
+				String fieldName = field.getString("name");
+				FieldType fieldType = new FieldType(field.getJsonObject("type"), builder);
+				if (fieldType.typeName != null) {
+					// reset to known type if it has a name
+					fieldType = builder.getType(fieldType.typeName);
+				}
+				if (fieldType.isVisible()) {
+					NodeField nodeField = new NodeField(this, fieldName, fieldType); 
+					fields.put(nodeField.fieldName, nodeField);
+					Common.trace("Added field %s with type %s", nodeField, fieldType);;
+				}
+				else {
+					Common.trace("Skipped field %s.%s with type %s", 
+							typeName, fieldName, fieldType);;
+				}
+			}
+			for (JsonValue value : schemaType.getJsonArray("possibleTypes")) {
+				possibleTypes.add(builder.getNodeType(((JsonObject)value).getString("name")));
+			}
+		}
+	}
+	
+	void trimFields() {
+		fields.values().stream()
+		.filter(f -> ! f.fieldType.isVisible())
+		.toList().stream().forEach(f -> fields.remove(f.fieldName));
+	}
+				
 	@Override
 	public String toString() {
 		return typeName;
@@ -81,12 +101,11 @@ class NodeType {
 	 * 
 	 * @param type  The specified type to test against.
 	 * <p>
-	 * @return True if this type is identical to the specified type and is not an interface,
+	 * @return True if this type is identical to the specified type and is not abstract,
 	 *         or if this type refers to the specified type as one of its possible types.
 	 */
-	public boolean canBeCreatedWith(NodeType type) {
-		return (this == type && !isInterface) 
-				|| possibleTypes.contains(type);
+	public boolean isImplementedBy(NodeType type) {
+		return (this == type && ! isAbstract()) || possibleTypes.contains(type);
 	}
 	
 	String toFieldName() {
@@ -129,9 +148,16 @@ class NodeType {
 		return fields.get(fieldName);
 	}
 	
+	NodeField findFieldWith(FieldTag tag) {
+		for (NodeField field : fields.values()) {
+			if (field.has(tag)) return field;
+		}
+		return null;
+	}
+
 	void add(JoinValueExpr jvex) {
 		jvexList.add(jvex);
-		if (isInterface) {
+		if (isAbstract()) {
 			for (NodeType ptype : possibleTypes) {
 				ptype.jvexList.add(jvex);
 			}
@@ -140,6 +166,18 @@ class NodeType {
 	
 	Iterable<JoinValueExpr> getJoinValueExprs() {
 		return jvexList;
+	}
+	
+	Iterable<NodeField> getFields() {
+		return fields.values();
+	}
+
+	Iterable<NodeType> getPossibleTypes() {
+		return possibleTypes;
+	}
+	
+	boolean hasPossibleTypes() {
+		return ! possibleTypes.isEmpty();
 	}
 
 }

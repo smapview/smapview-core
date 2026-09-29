@@ -2,6 +2,7 @@ package com.smapview.view;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
@@ -33,14 +34,10 @@ public class JoinValueExprTest {
 	static {
 		Common.LOGGER.setLevel(Level.FINEST);
 	}
-
+	
 	@Test
 	void singleValue() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("books").build();
-		view.setRootType("Library");
-		view.addPathField("Library.books", "Book.library");
-		view.addPathField("Book.quotes", "Quote.book");
-		EvalContext context = bookContext(view);
+		EvalContext context = bookContext();
 		context.assertExprValues("title", "Lessons learned from my uncle");
 		context.assertExprValues("'title: ' + title", "title: Lessons learned from my uncle");
 		context.assertExprValues("library.name", "All Books");
@@ -51,21 +48,13 @@ public class JoinValueExprTest {
 
 	@Test
 	void multiValues() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("books").build();
-		view.setRootType("Library");
-		view.addPathField("Library.books", "Book.library");
-		view.addPathField("Book.quotes", "Quote.book");
-		EvalContext context = bookContext(view);
+		EvalContext context = bookContext();
 		context.assertExprValues("authors", "Alex Sogar", "Miet Hanke");
 	}
 
 	@Test
 	void compound() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("books").build();
-		view.setRootType("Library");
-		view.addPathField("Library.books", "Book.library");
-		view.addPathField("Book.quotes", "Quote.book");
-		EvalContext context = bookContext(view);
+		EvalContext context = bookContext();
 		context.assertExprValues("title + ' by ' + authors", 
 				"Lessons learned from my uncle by Alex Sogar",
 				"Lessons learned from my uncle by Miet Hanke");
@@ -75,17 +64,24 @@ public class JoinValueExprTest {
 
 	@Test
 	void ifThen() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("books").build();
-		view.setRootType("Library");
-		view.addPathField("Library.books", "Book.library");
-		view.addPathField("Book.quotes", "Quote.book");
-		EvalContext context = bookContext(view);
+		EvalContext context = bookContext();
 		context.assertExprValues("category.equals('Nonfiction')? title", 
 				"Lessons learned from my uncle");
 		context.assertExprValues("category.equals('Fiction')? title");
 	}
 
-	EvalContext bookContext(View view) throws GraphBuilderException {
+	EvalContext bookContext() 
+			throws GraphBuilderException, GraphSchemaException, 
+			ViewRequestException, IOException 
+	{
+		View view = TestViewBuilder.newWithSchema("books")
+				.setRootType("Library")
+				.addPathField("Library.books", "Book.library")
+				.addPathField("Book.quotes", "Quote.book")
+				.addPointerField("Library.name")
+				.addPointerField("Book.title")
+				.addPointerField("Quote.text")
+				.build();
 		NodeDataBuilder builder = NodeDataBuilder.newBuilder(view)
 				.addRoot("Library").set("name", "All Books");
 		NodeData library = builder.get();

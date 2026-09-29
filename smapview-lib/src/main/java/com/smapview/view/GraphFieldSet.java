@@ -38,19 +38,14 @@ class GraphFieldSet {
 	
 	GraphFieldSet(NodeType type) throws GraphSchemaException {
 		this.type = type;
-		idField = findFieldWith(FieldTag.ID);
-		pointerField = findFieldWith(FieldTag.POINTER);
-		timestampField = findFieldWith(FieldTag.TIMESTAMP);
+		idField = type.findFieldWith(FieldTag.ID);
+		pointerField = type.findFieldWith(FieldTag.POINTER);
+		timestampField = type.findFieldWith(FieldTag.TIMESTAMP);
 		baseFields = Arrays.asList(idField, pointerField, timestampField)
 				.stream().filter(f -> f != null).toList();
 		for (NodeField field : baseFields) addRole(field);
 	}
-	
-	NodeField findFieldWith(FieldTag tag) {
-		return type.fields.values().stream()
-				.filter(f -> f.has(tag)).findFirst().orElse(null);
-	}
-		
+			
 	void addPath(NodeField pathField, GraphFieldSet pathFieldSet) throws GraphSchemaException {
 		paths.put(pathField, pathFieldSet);
 		addRole(pathField, FieldRole.PATH);

@@ -5,15 +5,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 class NodeData {
 	
-	static int ADD_PARENT_REF = 0x01;
-
-	static int SKIP_ID = 0x02;
-
-	static int SKIP_POINTER = 0x04;
-
 	final NodeType nodeType;
 	
 	NodeInfo nodeInfo;	
@@ -27,7 +23,6 @@ class NodeData {
 	NodeData(NodeType nodeType) {
 		this.nodeType = nodeType;
 	}
-	
 	
 	void set(NodeField field, Object value) throws GraphBuilderException {
 		// check value type
@@ -57,38 +52,6 @@ class NodeData {
 		return (T) fieldValues.get(field);
 	}
 
-	void writeTo(ViewRequest request) {
-		writeTo(request, 0);
-	}
-
-	void writeTo(ViewRequest request, int options) {
-		boolean addParentRef = (options & ADD_PARENT_REF) != 0;
-		boolean skipId = (options & SKIP_ID) != 0;
-		boolean skipPointer = (options & SKIP_POINTER) != 0;
-		// write id or pointer field
-		if (nodeInfo != null && nodeInfo.getNodeId() != null && ! skipId) {
-			request.append(nodeType.getIdField(), nodeInfo.getNodeId());
-		}
-		else if (addParentRef && nodeInfo != null 
-				&& nodeInfo.parentNode != null 
-				&& nodeInfo.parentNode.getNodeId() != null) 
-		{
-			request.startInputObject(parentPath.getInverseField());
-			request.append(parentType.getIdField(), nodeInfo.parentNode.getNodeId());
-			request.endInputObject();
-			request.append(nodeType.getPointerField(), getPointer());
-		}
-		else if (! skipPointer){
-			request.append(nodeType.getPointerField(), getPointer());
-		}
-		// write other fields
-		for (Map.Entry<NodeField, Object> fval : fieldValues.entrySet()) {
-			NodeField field = fval.getKey();
-			if (! field.hasAny(FieldTag.POINTER, FieldTag.LINK)) {
-				field.writeValueTo(fval.getValue(), request);
-			}
-		}
-	}
 		
 	boolean hasNonNull(NodeField field) {
 		return fieldValues.get(field) != null;
@@ -107,11 +70,47 @@ class NodeData {
 	}
 	
 	void checkMandatoryFields() throws GraphBuilderException {
-		for (NodeField field : nodeType.fields.values()) {
+		for (NodeField field : nodeType.getFields()) {
 			if (field.needsInput() && ! fieldValues.containsKey(field)) {
 				throw new GraphBuilderException("Mandatory field not set: "+field);
 			}
 		}
 	}
+	
+	String getNodeId() {
+		return nodeInfo != null? nodeInfo.getNodeId() : null;
+	}
+	
+	NodeField getIdField() {
+		return nodeType.getIdField();
+	}
+	
+	NodeField getPointerField() {
+		return nodeType.getPointerField();
+	}
 
+	String getParentNodeId() {
+		return nodeInfo != null && nodeInfo.parentNode != null? 
+				nodeInfo.parentNode.getNodeId() : null;
+	}
+
+	NodeField getParentIdField() {
+		return parentType != null? parentType.getIdField() : null; 
+	}
+
+	NodeField getInversePath() {
+		return parentPath != null? parentPath.getInverseField() : null;
+	}
+	
+	void forEachValue(Predicate<NodeField> ifTest, BiConsumer<NodeField,Object> thenDo) {
+		fieldValues.entrySet().stream()
+		.filter(e -> ifTest.test(e.getKey()))
+		.forEach(e -> thenDo.accept(e.getKey(), e.getValue()));
+	}
+	
+	@Override
+	public String toString() {
+		return "" + fieldValues;
+	}
+	
 }

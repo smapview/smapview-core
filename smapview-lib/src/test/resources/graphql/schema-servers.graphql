@@ -20,11 +20,17 @@ type Server implements ConfigItem {
 	networkCards: [NetworkCard]
 }
 
+enum NetworkZone {
+	INT
+	DMZ
+}
+
 type NetworkCard {
 	id: ID!
 	name: String!
 	server: Server! @hasInverse(field: "networkCards")
 	ipAddress: String
+	zone: NetworkZone!
 }
 
 type Template implements ConfigItem {
@@ -38,5 +44,6 @@ type Package implements ConfigItem {
 
 interface HasNoPossibleType {
 	id: ID!
+	source: ConfigSource! @hasInverse(field: wrong)
 }
 

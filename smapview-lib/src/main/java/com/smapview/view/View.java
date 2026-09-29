@@ -3,6 +3,7 @@ package com.smapview.view;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -10,123 +11,38 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.regex.Matcher;
 
 import com.smapview.view.ViewRequest.Context;
 
-import jakarta.json.JsonArray;
-import jakarta.json.JsonObject;
-import jakarta.json.JsonValue;
-
 public class View {
 
-	static final String QUERY_TYPES = "__schema { types { "
-			+ "name, kind, possibleTypes { name }, "
+	static final String QUERY_TYPES = "__schema { types { name, kind, "
+			+ "enumValues { name }, possibleTypes { name }, "
 			+ "fields { name, type { name, kind, ofType { name } } } "
 			+ "} }";
 	
-	final private Map<String,NodeType> typeMap = new HashMap<>();
-	
-	final private List<LinkStrategy> linkStrategies = new ArrayList<>();
-
-	final private List<JoinStrategy> joinStrategies = new ArrayList<>(24);
-
 	final URI graphqlEndpoint;
 	
 	final URI mutateEndpoint;
 	
 	final HttpClient client;
 
-	private Map<String,JsonObject> schemaTypes;  
-	
 	private NodeType rootType;
-	
+
+	private Map<String,NodeType> nodeTypes;
+
+	private List<LinkStrategy> linkStrategies;
+
+	private List<JoinStrategy> joinStrategies;
+
 	private ViewUpdate update;
 			
-	public View(String dgraphHttpUrl) throws ViewRequestException {
-		this.graphqlEndpoint = URI.create(dgraphHttpUrl + "/graphql");
-		this.mutateEndpoint = URI.create(dgraphHttpUrl + "/mutate?commitNow=true");
+	View(String dgraphpUrl) {
+		this.graphqlEndpoint = URI.create(dgraphpUrl + "/graphql");
+		this.mutateEndpoint = URI.create(dgraphpUrl + "/mutate?commitNow=true");
 		this.client = HttpClient.newHttpClient();
-		loadSchemaTypes();
 	}
 	
-	private void loadSchemaTypes() throws ViewRequestException {
-		JsonArray types = new ViewRequest(this, QUERY_TYPES)
-				.execToObject()
-				.getJsonObject("__schema")
-				.getJsonArray("types");
-		HashMap<String,JsonObject> map = new HashMap<>();
-		for (JsonValue value : types) {
-			JsonObject type = (JsonObject)value;
-			map.put(type.getString("name"), type);
-		}
-		this.schemaTypes = Collections.unmodifiableMap(map);
-	}
-		
-	/**
-	 * Sets the base node type for all root nodes in view graphs.
-	 *   
-	 * @param nodeTypeName The node type name for root nodes.
-	 */
-	public void setRootType(String nodeTypeName) {
-		if (rootType == null) {
-			rootType = mapNodeType(nodeTypeName);
-		}
-		else throw new IllegalStateException();
-	}
-	
-	NodeType mapNodeType(String typeName) {
-		if (typeMap.containsKey(typeName)) return typeMap.get(typeName);
-		if (!schemaTypes.containsKey(typeName)) {
-			throw new IllegalArgumentException("Cannot find type " + typeName);
-		}
-		NodeType type = new NodeType(this, schemaTypes.get(typeName));
-		typeMap.put(typeName, type);
-		return type;
-	}
-			
-	/**
-	 * Adds a link field.
-	 * <p>
-	 * The link field (and inverse link field) must be of GraphQL object list type, so object 
-	 * references can be added and removed from the lists during graph updates, based on 
-	 * strategy options. 
-	 * <p>
-	 * @param linkField         The link field to be updated when resolving node links.
-	 * @param inverseField      The inverse link associated with the specified link field.
-	 * 
-	 * @return A link strategy used to resolve links during graph updates. 
-	 */
-	public LinkStrategy addLinkField(String linkField, String inverseField) {
-		return new LinkStrategy(this, getNodeField(linkField), getNodeField(inverseField));
-	}
-	
-	public void addPathField(String pathField, String inverseField) {
-		getNodeField(pathField).markAsPath(getNodeField(inverseField), this);
-	}
-
-	public void addPointerField(String pointerField) {
-		getNodeField(pointerField).markAsPointer();
-	}
-
-	public void addTimestampField(String timestampField) {
-		getNodeField(timestampField).markAsTimestamp();
-	}
-
-	NodeField getNodeField(String qualifiedFieldName) {
-		Matcher m = NodeField.QUALIFIED_NAME.matcher(qualifiedFieldName);
-		if (m.matches()) {
-			String typeName = m.group(1);
-			String fieldName = m.group(2);
-			NodeField result = mapNodeType(typeName).getField(fieldName);
-			if (result == null) throw new IllegalArgumentException(
-					"Cannot find field: " + qualifiedFieldName);
-			else return result;
-		}
-		else throw new IllegalArgumentException(
-				"Not a qualified field name: " + qualifiedFieldName);
-	}
-
 	/**
 	 * Starts a new view update.
 	 * 
@@ -139,39 +55,55 @@ public class View {
 	public ViewUpdate startUpdate() throws GraphSchemaException {
 		if (update != null) throw new IllegalStateException();
 		else {
-			mapToTypes(buildFieldSet(rootType, new HashSet<>()));
 			return (update = new ViewUpdate(this));
 		}
 	}
-		
-	public NodeType getNodeType(String typeName) {
-		NodeType result = typeMap.get(typeName);
-		if (result == null) throw new IllegalArgumentException(
-				"Cannot find view node type: " + typeName);
-		return result;
+	
+	void initFrom(ViewBuilder builder) throws GraphSchemaException {
+		this.rootType = builder.getRootType();
+		this.nodeTypes = HashMap.newHashMap(builder.listNodeTypes().size());
+		this.linkStrategies = new ArrayList<>(builder.listLinkStrategies());
+		this.joinStrategies = new ArrayList<>(builder.listJoinStrategies());
+		for (NodeType type : builder.listNodeTypes()) {
+			nodeTypes.put(type.typeName, type);
+		}
+		mapToTypes(buildFieldSet(rootType, new HashSet<>()));
+	}
+			
+	public NodeType getNodeType(String name) {
+		NodeType result = nodeTypes.get(name);
+		if (result != null) {
+			if (result.isAbstract() && ! result.hasPossibleTypes()) {
+				throw new IllegalArgumentException("Type " + result.typeName + 
+						" not implemented");
+			}
+			else return result;
+		}
+		else throw new IllegalArgumentException("Cannot find node type: " + name);
 	}
 		
+	public Collection<NodeType> listNodeTypes() {
+		return Collections.unmodifiableCollection(nodeTypes.values());
+	}
+
 	public NodeType getRootType() {
 		return rootType;
 	}
-
-	NodeType getType(String name) throws GraphSchemaException {
-		NodeType type = typeMap.get(name);
-		if (type == null) throw new GraphSchemaException("Unknown type: " + name);
-		else return type;
-	}
-	
-	public Map<String,NodeType> getTypeMap() {
-		return Collections.unmodifiableMap(typeMap);
-	}
-	
+		
 	private GraphFieldSet buildFieldSet(NodeType type, Set<NodeType> visitedTypes) 
 			throws GraphSchemaException 
 	{
 		if (!visitedTypes.add(type)) throw new GraphSchemaException("Path cycle detected");
 		GraphFieldSet fieldSet = new GraphFieldSet(type);
-		for (NodeField field : type.fields.values()) {
+		for (NodeField field : type.getFields()) {
 			field.prepareForInput();
+			List<Class<?>> writeableTypes = ViewRequest.listInputTypes(field.fieldType);
+			if (field.allowsInput() && (! field.isLink()) 
+					&& ! writeableTypes.contains(field.getInputType()))
+			{
+				throw new GraphSchemaException("Unsupported input type for " + field +
+						": " + field.getInputType().getName());
+			}
 			if (field.isPath()) {
 				fieldSet.addPath(field, 
 						buildFieldSet(field.getValueNodeType(), visitedTypes));
@@ -180,8 +112,8 @@ public class View {
 				throw new GraphSchemaException("Missing join for link field: " + field);
 			}
 		}
-		if (type.isInterface) {
-			for (NodeType ptype : type.possibleTypes) {
+		if (type.isAbstract()) {
+			for (NodeType ptype : type.getPossibleTypes()) {
 				GraphFieldSet fragment = buildFieldSet(ptype, visitedTypes);
 				fieldSet.addFragment(fragment);
 			}
@@ -226,26 +158,12 @@ public class View {
 		throw new UnsupportedOperationException();
 	}
 
-	short register(LinkStrategy ls) {
-		linkStrategies.add(ls);
-		return (short)linkStrategies.size();
-	}
-	
 	LinkStrategy getLinkStrategy(short linkId) {
 		return linkStrategies.get(linkId - 1);
-	}
-
-	short register(JoinStrategy js) {
-		joinStrategies.add(js);
-		return (short)joinStrategies.size();
 	}
 	
 	JoinStrategy getJoinStrategy(short joinId) {
 		return joinStrategies.get(joinId - 1);
 	}
-
-	public List<LinkStrategy> getLinkStrategies() {
-		return linkStrategies;
-	}
-
+	
 }

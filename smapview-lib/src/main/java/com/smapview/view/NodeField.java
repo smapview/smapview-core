@@ -4,80 +4,45 @@ import java.util.Date;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import com.smapview.view.FieldType.Kind;
+
 class NodeField {
 
 	static final Pattern NAME = Pattern.compile("[a-z_][a-zA-Z_]*");
 	
 	static final Pattern QUALIFIED_NAME = 
 			Pattern.compile("(" + NodeType.NAME + ")\\.(" + NAME + ")");
-
-	private interface InputWriter {
-		void writeTo(NodeField field, Object value, ViewRequest request);
-	}
-		
-	private static final InputWriter STRING_WRITER = new InputWriter() {
-		@Override
-		public void writeTo(NodeField field, Object value, ViewRequest request) {
-			request.append(field, (String)value);
-		}
-	};
-
-	private static final InputWriter STRING_ARRAY_WRITER = new InputWriter() {
-		@Override
-		public void writeTo(NodeField field, Object value, ViewRequest request) {
-			request.append(field, (String[])value);
-		}
-	};
-
-	private static final InputWriter DATE_TIME_WRITER = new InputWriter() {
-		@Override
-		public void writeTo(NodeField field, Object value, ViewRequest request) {
-			// TODO complete this
-		}
-	};
-
-	private static final InputWriter NODE_DATA_WRITER = new InputWriter() {
-		@Override
-		public void writeTo(NodeField field, Object value, ViewRequest request) {
-			request.startInputArray(field);
-			// case of a path field, always a list
-			@SuppressWarnings("unchecked")
-			List<NodeData> list = (List<NodeData>)value;
-			for (NodeData data : list) {
-				request.startInputObject();
-				data.writeTo(request);
-				request.endInputObject();
-			}
-			request.endInputArray();
-		}
-	};
-
 	
 	final String fieldName;
 	
 	final NodeType declaringType;
 
-	final private String schemaBaseType;
-	
-	private InputWriter inputWriter;
+	final FieldType fieldType;
 	
 	private Class<?> inputType;
 
 	private int tags = 0;
 
-	private NodeType valueNodeType;
-
 	private NodeField inverseField;	
 	
 	private LinkStrategy linkStrategy;
 
-	NodeField(NodeType type, String fieldName, String schemaBaseType, FieldTag... tags) {
+	NodeField(NodeType type, String fieldName, FieldType fieldType) {
+		if (!NAME.matcher(fieldName).matches()) {
+			throw new IllegalArgumentException("Invalid type name: "+fieldName);
+		}
 		this.fieldName = fieldName;
-		this.schemaBaseType = schemaBaseType;
+		this.fieldType = fieldType;
 		this.declaringType = type;
-		for (FieldTag tag : tags) if (tag != null) add(tag);
+		String baseTypeName = fieldType.getBaseType().typeName;
+		if ("ID".equals(baseTypeName)) add(FieldTag.ID);
+		else if ("String".equals(baseTypeName)) add(FieldTag.STRING);
+		else if ("DateTime".equals(baseTypeName)) add(FieldTag.DATE_TIME);
+		else if (fieldType.getBaseType() instanceof EnumType) add(FieldTag.ENUM);
+		if (fieldType.kind == Kind.NON_NULL) add(FieldTag.MANDATORY);
+		else if (fieldType.kind == Kind.LIST) add(FieldTag.LIST);
 	}
-
+	
 	private void add(FieldTag tag) {
 		this.tags |= tag.value;
 	}
@@ -100,68 +65,70 @@ class NodeField {
 		return true;
 	}
 
-	void markAsPath(NodeField inverseField, View view) {
+	void markAsPath(NodeField inverseField, ViewBuilder builder) {
 		if (hasAny(FieldTag.ID, FieldTag.STRING, FieldTag.DATE_TIME)
 				|| ! has(FieldTag.LIST)) 
 		{
 			throwInvalidTypeFor("path");
 		}
 		else {
-			setInverse(inverseField, view);
+			checkValueNodeType();
+			setInverse(inverseField, builder);
 			add(FieldTag.PATH);
-			if (declaringType.isInterface) {
-				for (NodeType type : declaringType.possibleTypes) {
+			if (declaringType.isAbstract()) {
+				for (NodeType type : declaringType.getPossibleTypes()) {
 					NodeField same = type.getField(fieldName);
 					same.add(FieldTag.PATH);
 					same.inverseField = inverseField;
-					same.valueNodeType = valueNodeType;
 				}
 			}
 		}
 	}
 
-	void markAsLink(LinkStrategy linkStrategy, NodeField inverseField, View view) {
+	void markAsLink(LinkStrategy linkStrategy, NodeField inverseField, ViewBuilder builder) {
 		if (hasAny(FieldTag.ID, FieldTag.STRING, FieldTag.DATE_TIME)) {
 			throwInvalidTypeFor("link");
 		}
 		else {
+			checkValueNodeType();
 			this.linkStrategy = linkStrategy;
-			setInverse(inverseField, view);
+			setInverse(inverseField, builder);
 			add(FieldTag.LINK);
-			if (declaringType.isInterface) {
-				for (NodeType type : declaringType.possibleTypes) {
+			if (declaringType.isAbstract()) {
+				for (NodeType type : declaringType.getPossibleTypes()) {
 					NodeField same = type.getField(fieldName);
 					same.linkStrategy = linkStrategy;
 					same.inverseField = inverseField;
-					same.valueNodeType = valueNodeType;
 					same.add(FieldTag.LINK);
 				}
 			}
 		}
 	}
 
-	private void setInverse(NodeField inverse, View view) {
-		NodeType fromType = view.mapNodeType(inverse.schemaBaseType);
-		NodeType toType = view.mapNodeType(schemaBaseType);
-		if (toType == inverse.declaringType && fromType == declaringType) {
+	private void setInverse(NodeField inverse, ViewBuilder builder) {
+		if (fieldType.getBaseType() == inverse.declaringType 
+				&& inverse.fieldType.getBaseType() == declaringType) 
+		{
 			this.inverseField = inverse;
-			this.valueNodeType = toType;
 			inverse.add(FieldTag.REVERSE);
 			inverse.inverseField = this;
-			inverse.valueNodeType = fromType;
 		}
 		else {
-			Common.trace("Compared toType=%s fromType=%s declType=%s invDeclType=%s",
-					fromType, toType, declaringType, inverse.declaringType);
 			throw new IllegalArgumentException("Field types do not match declaring types");
 		}
 	}
 	
 	void markAsPointer() {
-		if (hasAll(FieldTag.STRING, FieldTag.MANDATORY)) {
+		NodeField existing = declaringType.findFieldWith(FieldTag.POINTER);
+		if (existing != null) {
+			throw new IllegalArgumentException(
+					"Existing pointer field for " + declaringType.typeName + 
+					": " + existing.fieldName);
+		}
+		else if (hasAny(FieldTag.STRING, FieldTag.ENUM) && has(FieldTag.MANDATORY)) {
 			add(FieldTag.POINTER);
-			if (declaringType.isInterface) {
-				for (NodeType type : declaringType.possibleTypes) {
+			if (declaringType.isAbstract()) {
+				for (NodeType type : declaringType.getPossibleTypes()) {
 					type.getField(fieldName).markAsPointer();
 				}
 			}
@@ -172,8 +139,8 @@ class NodeField {
 	void markAsTimestamp() {
 		if (has(FieldTag.DATE_TIME) && ! has(FieldTag.LIST)) {
 			add(FieldTag.TIMESTAMP);
-			if (declaringType.isInterface) {
-				for (NodeType type : declaringType.possibleTypes) {
+			if (declaringType.isAbstract()) {
+				for (NodeType type : declaringType.getPossibleTypes()) {
 					type.getField(fieldName).markAsTimestamp();
 				}
 			}
@@ -224,13 +191,13 @@ class NodeField {
 	boolean isTimestamp() {
 		return has(FieldTag.TIMESTAMP);
 	}
-
-	void writeValueTo(Object inputValue, ViewRequest request) {
-		inputWriter.writeTo(this, inputValue, request);
-	}
 	
 	boolean needsInput() {
 		return inputType != null && isMandatory();
+	}
+
+	boolean allowsInput() {
+		return inputType != null;
 	}
 
 	boolean isValidInput(Object inputValue) {
@@ -240,27 +207,25 @@ class NodeField {
 	
 	void prepareForInput() {
 		inputType = has(FieldTag.DATE_TIME)? Date.class
-				: hasAny(FieldTag.STRING)? 
-						(has(FieldTag.LIST)? String[].class : String.class)
-						: has(FieldTag.PATH)? List.class 
-								: has(FieldTag.LINK)? JoinValue[].class : null;	
-		inputWriter = has(FieldTag.DATE_TIME)? DATE_TIME_WRITER 
-				: has(FieldTag.STRING)? 
-						(has(FieldTag.LIST)? STRING_ARRAY_WRITER : STRING_WRITER)
-						: has(FieldTag.PATH)? NODE_DATA_WRITER : null;
+				: has(FieldTag.STRING)? (has(FieldTag.LIST)? String[].class : String.class)
+						: has(FieldTag.ENUM)? String.class
+								: has(FieldTag.PATH)? List.class 
+										: has(FieldTag.LINK)? JoinValue[].class : null;	
 		if (inputType != null) {
 			Common.trace("Prepared %s for input type %s", this, inputType);
 		}
 	}
 	
+	Class<?> getInputType() {
+		return inputType;
+	}
+	
 	String getGraphqlType() {
-		return isList()? "[" + schemaBaseType + "]"
-				: isMandatory()? schemaBaseType + "!"
-						: schemaBaseType;
+		return fieldType.toString();
 	}
 
 	NodeType getValueNodeType() {
-		return valueNodeType;
+		return (NodeType)fieldType.getBaseType();
 	}
 
 	NodeField getInverseField() {
@@ -268,11 +233,19 @@ class NodeField {
 	}
 	
 	boolean isAssignableFrom(NodeType type) {
-		return valueNodeType != null && valueNodeType.canBeCreatedWith(type);
+		return getValueNodeType().isImplementedBy(type);
 	}
 
 	public LinkStrategy getLinkStrategy() {
 		return linkStrategy;
+	}
+
+	void checkValueNodeType() {
+		NodeType type = getValueNodeType();
+		if (type.isAbstract() && ! type.hasPossibleTypes()) {
+			throw new IllegalArgumentException("Field" + this +
+					" value type " + type.typeName + " not implemented");
+		}
 	}
 
 }

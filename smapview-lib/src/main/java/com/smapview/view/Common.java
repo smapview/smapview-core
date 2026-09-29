@@ -4,7 +4,7 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
-public class Common {
+class Common {
 
 	static class LogHandler extends java.util.logging.Handler {
 		
@@ -30,8 +30,9 @@ public class Common {
 	static final LogHandler logHandler = new LogHandler();
 	
 	static {
-		logHandler.setLevel(Level.FINER);
+		logHandler.setLevel(Level.FINEST);
 		LOGGER.addHandler(logHandler);
+		LOGGER.setUseParentHandlers(false);
 	}
 		
 	static void trace(String msg, Object... args) {

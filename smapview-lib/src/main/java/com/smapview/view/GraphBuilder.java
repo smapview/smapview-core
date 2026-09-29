@@ -3,6 +3,7 @@ package com.smapview.view;
 import java.util.Date;
 import java.util.List;
 import java.util.Stack;
+import java.util.function.Consumer;
 
 import com.smapview.view.NodeInfo.NodeFlag;
 
@@ -45,14 +46,14 @@ public class GraphBuilder implements AutoCloseable {
 	{
 		NodeType resolvedType = update.context.view.getNodeType(nodeType);
 		if (nodeStack.isEmpty()) {
-			if (!update.context.view.getRootType().canBeCreatedWith(resolvedType)) {
+			if (!update.context.view.getRootType().isImplementedBy(resolvedType)) {
 				throw new GraphBuilderException("Invalid node type for root node");
 			}
 			nodeStack.push(new NodeData(resolvedType));
 		}
 		else {
 			if (buildPath != null) {
-				if (!buildPath.getValueNodeType().canBeCreatedWith(resolvedType)) {
+				if (!buildPath.getValueNodeType().isImplementedBy(resolvedType)) {
 					throw new GraphBuilderException("Invalid node type for selected path");
 				}
 			}
@@ -79,9 +80,13 @@ public class GraphBuilder implements AutoCloseable {
 	{
 		NodeData data = getCurrentNode();
 		NodeField sfield = data.nodeType.getField(field);
-		if (sfield.isList()) safeSet(data, sfield, new String[] { value });
-		else safeSet(data, sfield, value);
-		return this;
+		if (sfield == null) throw new GraphBuilderException("Unknown field " +
+				data.nodeType.typeName + "." + field);
+		else {
+			if (sfield.isList()) safeSet(data, sfield, new String[] { value });
+			else safeSet(data, sfield, value);
+			return this;
+		}
 	}
 
 	public GraphBuilder set(String field, String[] values) 
@@ -146,6 +151,10 @@ public class GraphBuilder implements AutoCloseable {
 	public GraphBuilder endNode() 
 			throws GraphBuilderException, ViewRequestException 
 	{
+		if (getCurrentNode().getPointer() == null) {
+			throw new GraphBuilderException("Missing pointer value " 
+					+ getCurrentNode().getPointerField());
+		}
 		switch (nodeStack.size()) {
 		case 0 : 
 			throw new IllegalStateException();
@@ -183,6 +192,7 @@ public class GraphBuilder implements AutoCloseable {
 	private void addToBatch(NodeData data) 
 			throws GraphBuilderException, ViewRequestException 
 	{
+		Common.trace("Adding to mutation batch: %s", data);
 		if (batch == null) batch = new MutationBatch(this, MUTATION_BATCH_SIZE);
 		batch.add(data);
 		if (batch.size() == MUTATION_BATCH_SIZE) {
@@ -222,6 +232,15 @@ public class GraphBuilder implements AutoCloseable {
 	private NodeInfo getRootInfo() throws ViewRequestException {
 		if (nodeStack.isEmpty()) throw new IllegalStateException();
 		else return update.getOrCreateRoot(nodeStack.getFirst());			
+	}
+	
+	public GraphBuilder with(Consumer<GraphBuilder> consumer) {
+		consumer.accept(this);
+		return this;
+	}
+	
+	public void cancel(int nodeLevel) {
+		while (nodeStack.size() > nodeLevel) nodeStack.pop();
 	}
 				
 }

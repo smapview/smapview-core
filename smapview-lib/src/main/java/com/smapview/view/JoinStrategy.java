@@ -13,21 +13,25 @@ class JoinStrategy {
 	
 	final JoinScope joinScope;
 			
-	JoinStrategy(LinkStrategy linkStrategy, String keyName, String targetType, 
-			String valueExpr, JoinScope linkScope) 
+	JoinStrategy(LinkStrategy linkStrategy, String valueExpr, 
+			JoinScope joinScope, ViewBuilder builder) 
 	{
-		NodeType toType = linkStrategy.view.getNodeType(targetType);
+		this(linkStrategy, null, 
+				linkStrategy.linkField.fieldType.getBaseType().typeName,
+				valueExpr, joinScope, builder); 
+	}
+	
+	JoinStrategy(LinkStrategy linkStrategy, String keyName, String targetType, 
+			String valueExpr, JoinScope joinScope, ViewBuilder builder) 
+	{
+		NodeType toType = builder.getNodeType(targetType);
 		this.linkStrategy = linkStrategy;
 		this.keyName = keyName;
-		this.joinId = linkStrategy.view.register(this);
+		this.joinId = builder.register(this);
 		this.valueExpr = new JoinValueExpr(valueExpr, toType, joinId);
-		this.joinScope = linkScope;
+		this.joinScope = joinScope;
 	}
-	
-	JoinStrategy getJoinStrategy() {
-		return linkStrategy.view.getJoinStrategy(joinId);
-	}
-	
+		
 	short getLinkId() {
 		return linkStrategy.linkId;
 	}

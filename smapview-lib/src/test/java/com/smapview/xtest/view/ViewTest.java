@@ -1,41 +1,64 @@
 package com.smapview.xtest.view;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.util.logging.Level;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
-import com.smapview.view.Common;
+import com.smapview.view.GraphSchemaException;
 import com.smapview.view.TestViewBuilder;
 import com.smapview.view.View;
 
 public class ViewTest {
-	
-	static {
-		Common.LOGGER.setLevel(Level.FINEST);
-	}
-	
+		
 	@Test
-	void createViewEndpoint() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
-		assertEquals(0, view.getTypeMap().size());
+	void missingRootType() throws Exception {
+		assertThrows(IllegalStateException.class, 
+				() -> TestViewBuilder.newWithSchema("servers").build());
 	}
 
 	@Test
-	void setRootType() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
-		view.setRootType("ConfigSource");
-		assertEquals(1, view.getTypeMap().size());
+	void missingPointerField() throws Exception {
+		assertThrows(GraphSchemaException.class,
+				() -> TestViewBuilder.newWithSchema("servers")
+				.setRootType("ConfigSource")
+				.build());
 	}
 
 	@Test
 	void addPathFields() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
-		view.setRootType("ConfigSource");
-		view.addPathField("ConfigSource.items", "ConfigItem.source");
-		view.addPathField("Server.networkCards", "NetworkCard.server");
-		assertEquals(6, view.getTypeMap().size());
+		View view = TestViewBuilder.newWithSchema("servers")
+				.setRootType("ConfigSource")
+				.addPathField("ConfigSource.items", "ConfigItem.source")
+				.addPointerField("ConfigSource.name")
+				.addPointerField("ConfigItem.name")
+				.build();
+		assertEquals(5, view.listNodeTypes().size());
+	}
+
+	@Test
+	void addAbstractPath() throws Exception {
+		assertThrows(IllegalArgumentException.class, 
+				() -> TestViewBuilder.newWithSchema("servers")
+				.setRootType("ConfigSource")
+				.addPathField("ConfigSource.items", "ConfigItem.source")
+				.addPathField("ConfigSource.wrong", "HasNoPossibleType.source")
+				.addPointerField("ConfigSource.name")
+				.addPointerField("ConfigItem.name")
+				.build());
+	}
+
+	@Test
+	void addMorePathFields() throws Exception {
+		View view = TestViewBuilder.newWithSchema("servers")
+				.setRootType("ConfigSource")
+				.addPathField("ConfigSource.items", "ConfigItem.source")
+				.addPathField("Server.networkCards", "NetworkCard.server")
+				.addPointerField("ConfigSource.name")
+				.addPointerField("ConfigItem.name")
+				.addPointerField("NetworkCard.name")
+				.build();
+		assertEquals(6, view.listNodeTypes().size());
 	}
 
 }

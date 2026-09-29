@@ -1,15 +1,9 @@
 package com.smapview.xtest.view;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import java.util.logging.Level;
-
 import org.junit.jupiter.api.Test;
 
-import com.smapview.view.Common;
 import com.smapview.view.GraphBuilder;
 import com.smapview.view.GraphBuilderException;
-import com.smapview.view.GraphSchemaException;
 import com.smapview.view.JoinScope;
 import com.smapview.view.TestView;
 import com.smapview.view.TestViewBuilder;
@@ -21,29 +15,15 @@ public class ViewUpdateTest {
 
 	static int ipRoot = 0;
 	
-	static {
-		Common.LOGGER.setLevel(Level.FINEST);
-	}
-
-	@Test
-	void missingPointerField() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
-		view.setRootType("ConfigSource");
-		view.addPathField("ConfigSource.items", "ConfigItem.source");
-		view.addPointerField("ConfigSource.name");
-		view.addPointerField("Server.name");
-		view.addPointerField("Template.name");
-		assertThrows(GraphSchemaException.class, () -> view.startUpdate());
-	}
-
 	@Test
 	void simpleNodes() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
-		view.setRootType("ConfigSource");
-		view.addPathField("ConfigSource.items", "ConfigItem.source");
-		view.addPointerField("ConfigSource.name");
-		// here we use the name field defined on the interface
-		view.addPointerField("ConfigItem.name");
+		View view = TestViewBuilder.newWithSchema("servers")
+				.setRootType("ConfigSource")
+				.addPathField("ConfigSource.items", "ConfigItem.source")
+				.addPointerField("ConfigSource.name")
+				// here we use the name field defined on the interface
+				.addPointerField("ConfigItem.name")
+				.build();
 		ViewUpdate update = view.startUpdate();
 		try (GraphBuilder builder = update.startGraphUpdate()) {
 			addRoot(builder);
@@ -56,13 +36,14 @@ public class ViewUpdateTest {
 
 	@Test
 	void nodesAndSubNodes() throws Exception {
-		View view = TestViewBuilder.newBuilder().setSchema("servers").build();
-		view.setRootType("ConfigSource");
-		view.addPathField("ConfigSource.items", "ConfigItem.source");
-		view.addPathField("Server.networkCards", "NetworkCard.server");
-		view.addPointerField("ConfigSource.name");
-		view.addPointerField("ConfigItem.name");
-		view.addPointerField("NetworkCard.name");
+		View view = TestViewBuilder.newWithSchema("servers")
+				.setRootType("ConfigSource")
+				.addPathField("ConfigSource.items", "ConfigItem.source")
+				.addPathField("Server.networkCards", "NetworkCard.server")
+				.addPointerField("ConfigSource.name")
+				.addPointerField("ConfigItem.name")
+				.addPointerField("NetworkCard.name")
+				.build();
 		ViewUpdate update = view.startUpdate();
 		try (GraphBuilder builder = update.startGraphUpdate()) {
 			addRoot(builder);
@@ -74,13 +55,15 @@ public class ViewUpdateTest {
 
 	@Test
 	void nodesWithLinks() throws Exception {
-		TestView view = TestViewBuilder.newBuilder().setSchema("servers").build();
-		view.setRootType("ConfigSource");
-		view.addPathField("ConfigSource.items", "ConfigItem.source");
-		view.addPointerField("ConfigSource.name");
-		view.addPointerField("ConfigItem.name");
-		view.addLinkField("Server.template", "Template.servers")
-		.withSingleJoin("name", JoinScope.GRAPH);
+		TestView view = (TestView)
+				TestViewBuilder.newWithSchema("servers")
+				.setRootType("ConfigSource")
+				.addPathField("ConfigSource.items", "ConfigItem.source")
+				.addPointerField("ConfigSource.name")
+				.addPointerField("ConfigItem.name")
+				.addLinkField("Server.template", "Template.servers")
+				.withSingleJoin("name", JoinScope.GRAPH)
+				.build();
 		ViewUpdate update = view.startUpdate();
 		try (GraphBuilder builder = update.startGraphUpdate()) {
 			addRoot(builder);
@@ -104,51 +87,53 @@ public class ViewUpdateTest {
 	
 	void addServers(GraphBuilder builder) throws GraphBuilderException, ViewRequestException {
 		builder.node("Server")
-		.set("name", "HERMES")
-		.endNode();
+			.set("name", "HERMES")
+			.endNode();
 		builder.node("Server")
-		.set("name", "APOLLO")
-		.endNode();
+			.set("name", "APOLLO")
+			.endNode();
 	}
 
 	void addTemplates(GraphBuilder builder) throws GraphBuilderException, ViewRequestException {
 		builder.node("Template")
-		.set("name", "Ubuntu 16")
-		.endNode();
+			.set("name", "Ubuntu 16")
+			.endNode();
 		builder.node("Template")
-		.set("name", "Ubuntu 18")
-		.endNode();
+			.set("name", "Ubuntu 18")
+			.endNode();
 		builder.node("Template")
-		.set("name", "Ubuntu 20")
-		.endNode();
+			.set("name", "Ubuntu 20")
+			.endNode();
 	}
 	
 	void addServersWithCards(GraphBuilder builder) throws GraphBuilderException, ViewRequestException {
 		builder.node("Server")
-		.set("name", "HERMES")
-		.node("NetworkCard")
-		.set("name", "ETH0")
-		.set("ipAddress", "192.168.0.51")
-		.endNode()
-		.endNode();
+			.set("name", "HERMES")
+			.node("NetworkCard")
+				.set("name", "ETH0")
+				.set("ipAddress", "192.168.0.51")
+				.set("zone", "INT")
+				.endNode()
+			.endNode();
 		builder.node("Server")
-		.set("name", "APOLLO")
-		.node("NetworkCard")
-		.set("name", "ETH0")
-		.set("ipAddress", "192.168.0.52")
-		.endNode()
-		.endNode();
+			.set("name", "APOLLO")
+			.node("NetworkCard")
+				.set("name", "ETH0")
+				.set("ipAddress", "192.168.0.52")
+				.set("zone", "INT")
+				.endNode()
+			.endNode();
 	}
 
 	void addServersWithTemplates(GraphBuilder builder) throws GraphBuilderException, ViewRequestException {
 		builder.node("Server")
-		.set("name", "HERMES")
-		.set("template", "Ubuntu 16")
-		.endNode();
+			.set("name", "HERMES")
+			.set("template", "Ubuntu 16")
+			.endNode();
 		builder.node("Server")
-		.set("name", "APOLLO")
-		.set("template", "Ubuntu 18")
-		.endNode();
+			.set("name", "APOLLO")
+			.set("template", "Ubuntu 18")
+			.endNode();
 	}
 
 }

@@ -175,10 +175,13 @@ public class JoinValueExpr {
 			List<String> result = new ArrayList<>();
 			if (value.isList()) {
 				for (String value : (String[])context.unsafeGet(value)) {
-					result.add(value);
+					if (value != null) result.add(value);
 				}
 			}
-			else result.add(context.unsafeGet(value));
+			else {
+				String str = context.unsafeGet(value); 
+				if (str != null) result.add(str);
+			}
 			for (Function func : functions) {
 				if (func instanceof UnaryFunction) {
 					for (int i = 0; i < result.size() ; i++) {

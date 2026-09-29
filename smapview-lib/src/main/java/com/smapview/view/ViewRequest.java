@@ -9,6 +9,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
 import java.util.Stack;
 
 import com.smapview.view.LinkUpdater.Link;
@@ -28,11 +31,9 @@ class ViewRequest {
 		GRAPHQL_QUERY(null),
 		
 		GRAPHQL_MUTATION("\n  "),
+		
+		INPUT_OBJECT(", ");
 				
-		GRAPHQL_INPUT_OBJECT(", "),
-
-		GRAPHQL_INPUT_ARRAY(", ");
-
 		final String itemSeparator;
 		
 		Context(String itemSeparator) {
@@ -40,7 +41,7 @@ class ViewRequest {
 		}
 				
 	}
-	
+		
 	private class Scope {
 		
 		final Context context;
@@ -82,6 +83,12 @@ class ViewRequest {
 	
 	static final int MAX_ITEM_COUNT = 999;
 	
+	static final int ADD_PARENT_REF = 0x01;
+
+	static final int SKIP_ID = 0x02;
+
+	static final int SKIP_POINTER = 0x04;
+
 	final View view;
 	
 	final Context initialContext;
@@ -122,7 +129,6 @@ class ViewRequest {
 
 	URI selectEndpoint() {
 		switch (initialContext) {
-		case GRAPHQL_INPUT_OBJECT:
 		case GRAPHQL_MUTATION:
 		case GRAPHQL_QUERY:
 			return view.graphqlEndpoint;
@@ -136,17 +142,17 @@ class ViewRequest {
 	private void start(Context type) {
 		start(type, MAX_ITEM_COUNT);
 	}
-
+	
 	private void start(Context type, int maxItems) {
 		stack.push(new Scope(type, maxItems));
 	}
-	
-	private void end() {
-		stack.pop();
-	}
-	
+		
 	private Scope scope() {
 		return stack.peek();
+	}
+
+	private void end() {
+		stack.pop();
 	}
 
 	void writeGet(NodeType type, String nodeId) {
@@ -166,9 +172,7 @@ class ViewRequest {
 	String writeAdd(NodeData data) {
 		String alias = scope().ensureIn(Context.GRAPHQL_MUTATION).newItem("_ar%03d");
 		printer.format("%s(input: [{ ", data.nodeType.toAddName());
-		start(Context.GRAPHQL_INPUT_OBJECT);
-		data.writeTo(this, NodeData.ADD_PARENT_REF);
-		end();
+		writeInput(data, ADD_PARENT_REF);
 		printer.format(" }]) { %s ", data.nodeType.toFieldName());
 		data.nodeType.fieldSet.writeTo(printer);
 		printer.write(" }");
@@ -179,69 +183,146 @@ class ViewRequest {
 		String alias = scope().ensureIn(Context.GRAPHQL_MUTATION).newItem("_ur%03d");
 		printer.format("%s(input: { filter: { id: [\"%s\"] }, set: { ", 
 				data.nodeType.toUpdateName(), data.nodeInfo.getNodeId());
-		start(Context.GRAPHQL_INPUT_OBJECT);
-		data.writeTo(this, NodeData.SKIP_ID | NodeData.SKIP_POINTER);
-		end();
+		writeInput(data, SKIP_ID | SKIP_POINTER);
 		printer.format(" } }) { %s ", data.nodeType.toFieldName());
 		data.nodeType.fieldSet.writeTo(printer);
 		printer.write(" }");
 		return alias;
 	}
 	
-	void startInputObject(NodeField field) {
-		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT).newItem(field.fieldName);
-		start(Context.GRAPHQL_INPUT_OBJECT);
-		printer.write("{ ");
-	}
-
-	void startInputObject() {
-		scope().ensureIn(Context.GRAPHQL_INPUT_ARRAY).newItem();
-		start(Context.GRAPHQL_INPUT_OBJECT);
-		printer.write("{ ");
-	}
-
-	void endInputObject() {
-		// cannot close initial scope
-		if (stack.size() == 1) throw new IllegalArgumentException();
-		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT);
-		end();
-		printer.write(" }");
-	}
-
-	void startInputArray(NodeField field) {
-		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT).newItem(field.fieldName);
-		start(Context.GRAPHQL_INPUT_ARRAY);
-		printer.write("[ ");
-	}
-
-	void endInputArray() {
-		// cannot close initial scope
-		if (stack.size() == 1) throw new IllegalArgumentException();
-		scope().ensureIn(Context.GRAPHQL_INPUT_ARRAY);
-		end();
-		printer.write(" ]");
-	}
-
-	void append(NodeField field, String[] values) {
-		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT).newItem(field.fieldName);
-		printer.write("[");
-		for (int i=0; i<values.length; i++) {
-			if (i>0) printer.write(",");
-			appendValue(values[i]);
+	private void writeInput(NodeData data, int options) {
+		scope().ensureIn(Context.GRAPHQL_MUTATION, Context.INPUT_OBJECT);
+		start(Context.INPUT_OBJECT);
+		boolean addParentRef = (options & ADD_PARENT_REF) != 0;
+		boolean skipId = (options & SKIP_ID) != 0;
+		boolean skipPointer = (options & SKIP_POINTER) != 0;
+		// write id or pointer field
+		if (data.getNodeId() != null && ! skipId) {
+			append(data.getIdField(), data.getNodeId());
 		}
-		printer.write("]");
+		else if (addParentRef && data.getParentNodeId() != null) {
+			printer.write(data.getInversePath().fieldName);
+			printer.write(": { ");
+			append(data.getParentIdField(), data.getParentNodeId());
+			printer.write("}");
+			append(data.getPointerField(), data.getPointer());
+		}
+		else if (! skipPointer) {
+			append(data.getPointerField(), data.getPointer());
+		}
+		// write other fields
+		data.forEachValue(f -> ! f.hasAny(FieldTag.POINTER, FieldTag.LINK), 
+				this::append);
+		end();
 	}
 
-	void append(NodeField field, String value) {
-		scope().ensureIn(Context.GRAPHQL_INPUT_OBJECT).newItem(field.fieldName);
-		appendValue(value);
+	private void append(NodeField field, Object value) {
+		if (value == null) {
+			throw new IllegalArgumentException("Unexpected null value for " + field);
+		}
+		else {
+			scope().newItem();
+			printer.write(field.fieldName);
+			printer.write(": ");
+			appendValue(field.fieldType, value);
+		}
 	}
 	
-	private void appendValue(String value) {
+	private void appendValue(FieldType fieldType, Object value) {
+		switch (fieldType.kind) {
+		case LIST:
+			if (NodeType.canCreateFrom(fieldType.ofType)) {
+				@SuppressWarnings("unchecked")
+				List<NodeData> list = (List<NodeData>)value;
+				printer.write("[ ");
+				for (int i = 0; i < list.size(); i++) {
+					if (i > 0) printer.append(", ");
+					printer.write("{ ");
+					writeInput(list.get(i), 0);
+					printer.write(" }");
+				}
+				printer.write(" ]");
+			}
+			else if (value instanceof String[]) {
+				String[] list = (String[])value;
+				printer.append("[");
+				for (int i = 0; i < list.length; i++) {
+					if (i > 0) printer.append(",");
+					switch (fieldType.ofType.kind) {
+					case ENUM:
+						appendEnum(list[i]);
+						break;
+					case SCALAR:
+						appendString(list[i]);
+						break;
+					default:
+						throw new IllegalArgumentException(
+								"Invalid input field type: " + fieldType);
+					}
+				}
+				printer.append("]");
+			}
+			else throw new IllegalArgumentException(
+					"Invalid LIST input type: " + value.getClass());
+			break;
+		case NON_NULL:
+			appendValue(fieldType.ofType, value);
+			break;
+		case SCALAR:
+			if (value instanceof String) appendString((String)value);
+			else if (value instanceof Date) appendDateTime((Date)value);
+			else throw new IllegalArgumentException(
+					"Invalid SCALAR input type: " + value.getClass());
+			break;
+		case ENUM:
+			if (value instanceof String) appendEnum((String)value);
+			else throw new IllegalArgumentException(
+					"Invalid ENUM input type: " + value.getClass());
+			break;
+		default:
+			throw new IllegalArgumentException(
+					"Invalid input field type: " + fieldType);
+		}	
+	}
+
+	/**
+	 * Lists supported input types for a given field type.
+	 */
+	static List<Class<?>> listInputTypes(FieldType fieldType) {
+		switch (fieldType.kind) {
+		case LIST:
+			if (NodeType.canCreateFrom(fieldType.ofType)) {
+				return Arrays.asList(List.class);
+			}
+			else return  Arrays.asList(String[].class);
+		case NON_NULL:
+			return listInputTypes(fieldType.ofType);
+		case SCALAR:
+			return Arrays.asList(String.class, Date.class);
+		case ENUM:
+			return Arrays.asList(String.class);
+		default:
+			return Arrays.asList();
+		}	
+	}
+	
+	private void appendEnum(String value) {
+		printer.append(value);
+	}
+
+	private void appendDateTime(Date value) {
+		// TODO implement support for DateTime values
+		throw new UnsupportedOperationException();
+	}
+
+	private void appendString(String value) {
 		printer.write("\"");
 		for (int i=0; i<value.length(); i++) {
 			char c = value.charAt(i);
 			switch (c) {
+			case '"': 
+				printer.write("\\\"");
+				break;
 			case '\b': 
 				printer.write("\\b");
 				break;
@@ -302,11 +383,15 @@ class ViewRequest {
 	}
 
 	JsonValue exec() throws ViewRequestException {
+		return exec(true);
+	}
+
+	JsonValue exec(boolean traceResult) throws ViewRequestException {
 		try (InputStream stream = getResponse()) {
 			JsonObject result = Json.createReader(stream).readObject();
 			JsonArray errors = result.getJsonArray("errors");
 			JsonValue data = result.get("data");
-			Common.trace("Got request result: %s", result);
+			if (traceResult) Common.trace("Got request result: %s", result);
 			if (errors == null || errors.isEmpty()) return data;
 			else throw new ViewRequestException(errors);
 		} catch (IOException e) {
@@ -315,11 +400,19 @@ class ViewRequest {
 	}
 
 	JsonArray execToArray() throws ViewRequestException {
-		return (JsonArray)exec();
+		return execToArray(true);
+	}
+
+	JsonArray execToArray(boolean traceResult) throws ViewRequestException {
+		return (JsonArray)exec(traceResult);
 	}
 
 	JsonObject execToObject() throws ViewRequestException {
-		return (JsonObject)exec();
+		return execToObject(true);
+	}
+
+	JsonObject execToObject(boolean traceResult) throws ViewRequestException {
+		return (JsonObject)exec(traceResult);
 	}
 
 	JsonParser execToParser() throws ViewRequestException {
@@ -401,7 +494,6 @@ class ViewRequest {
 
 	String getContentType() {
 		switch (initialContext) {
-		case GRAPHQL_INPUT_OBJECT:
 		case GRAPHQL_MUTATION:
 		case GRAPHQL_QUERY:
 			return "application/graphql";

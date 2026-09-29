@@ -153,6 +153,7 @@ class GraphUpdate implements LinkContext {
 			GraphFieldSet fieldSet, JsonObject fieldSetData) throws ViewRequestException 
 	{
 		Common.trace("Reading node info, base path = %s, data = %s", basePath, fieldSetData);
+		// TODO find other pointers as fieldSet.pointerField may be null on abstract type
 		String pointer = fieldSetData.getString(fieldSet.pointerField.fieldName);
 		String path = basePath + "/" + pointer;
 		NodeInfo info = nodeMap.get(path);

@@ -7,6 +7,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
+import java.util.logging.Level;
 
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
@@ -15,7 +16,11 @@ import jakarta.json.JsonObject;
 
 public class TestView extends View {
 
-	TestView(String dgraphHttpUrl) throws ViewRequestException {
+	static {
+		Common.LOGGER.setLevel(Level.FINEST);
+	}
+
+	TestView(String dgraphHttpUrl) {
 		super(dgraphHttpUrl);
 	}
 
