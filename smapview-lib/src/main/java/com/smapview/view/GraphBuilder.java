@@ -9,7 +9,7 @@ import com.smapview.view.NodeInfo.NodeFlag;
 
 public class GraphBuilder implements AutoCloseable {
 
-	static final int MUTATION_BATCH_SIZE = 1;
+	static final int MUTATION_BATCH_SIZE = 50;
 	
 	final GraphUpdate update;
 		
@@ -159,6 +159,7 @@ public class GraphBuilder implements AutoCloseable {
 		case 0 : 
 			throw new IllegalStateException();
 		case 1:
+			flushBatch();
 			update.buildComplete();
 			break;
 		case 2:
@@ -195,7 +196,11 @@ public class GraphBuilder implements AutoCloseable {
 		Common.trace("Adding to mutation batch: %s", data);
 		if (batch == null) batch = new MutationBatch(this, MUTATION_BATCH_SIZE);
 		batch.add(data);
-		if (batch.size() == MUTATION_BATCH_SIZE) {
+		if (batch.size() == MUTATION_BATCH_SIZE) flushBatch();
+	}
+	
+	private void flushBatch() throws ViewRequestException {
+		if (batch != null) {
 			batch.execute();
 			batch = null;
 		}

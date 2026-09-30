@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
@@ -29,10 +28,6 @@ public class JoinValueExprTest {
 			assertTrue(Arrays.asList(values).equals(result));
 		}
 
-	}
-	
-	static {
-		Common.LOGGER.setLevel(Level.FINEST);
 	}
 	
 	@Test

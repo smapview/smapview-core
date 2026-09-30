@@ -416,46 +416,44 @@ class ViewRequest {
 	}
 
 	JsonParser execToParser() throws ViewRequestException {
-		try (JsonParser parser = Json.createParser(getResponse())) {
-			int resultDepth = 0;
-			boolean hasErrors = false;
-			boolean hasData = false;
-			while (parser.hasNext()) {
-				JsonParser.Event event = parser.next();
-				switch(event) {
-				case KEY_NAME:
-					String keyName = parser.getString();
-					if (resultDepth == 1) {
-						if ("errors".equals(keyName)) hasErrors = true;
-						else if ("data".equals(keyName)) hasData = true;
-						else if ("extensions".equals(keyName)) parser.skipObject(); 
-					}
-					break;
-				case START_ARRAY:
-					if (hasErrors) throw new ViewRequestException(parser.getArray());
-					else if (hasData) return parser;
-					else throw new ViewRequestException("Cannot parse response: unexpected array");
-				case START_OBJECT:
-					resultDepth++;
-					switch (resultDepth) {
-					case 1:
-						break;
-					case 2:
-						if (hasData) return parser;
-					default:
-						throw new ViewRequestException("Cannot parse response: unexpected object");
-					}
-					break;
-				case END_OBJECT:
-					resultDepth--;
-					break;
-				default:
-					break;
+		JsonParser parser = Json.createParser(getResponse());
+		int resultDepth = 0;
+		boolean hasErrors = false;
+		boolean hasData = false;
+		while (parser.hasNext()) {
+			JsonParser.Event event = parser.next();
+			switch(event) {
+			case KEY_NAME:
+				String keyName = parser.getString();
+				if (resultDepth == 1) {
+					if ("errors".equals(keyName)) hasErrors = true;
+					else if ("data".equals(keyName)) hasData = true;
+					else if ("extensions".equals(keyName)) parser.skipObject(); 
 				}
+				break;
+			case START_ARRAY:
+				if (hasErrors) throw new ViewRequestException(parser.getArray());
+				else if (hasData) return parser;
+				else throw new ViewRequestException("Cannot parse response: unexpected array");
+			case START_OBJECT:
+				resultDepth++;
+				switch (resultDepth) {
+				case 1:
+					break;
+				case 2:
+					if (hasData) return parser;
+				default:
+					throw new ViewRequestException("Cannot parse response: unexpected object");
+				}
+				break;
+			case END_OBJECT:
+				resultDepth--;
+				break;
+			default:
+				break;
 			}
-			throw new ViewRequestException("Cannot parse response");
 		}
-
+		throw new ViewRequestException("Cannot parse response");
 	}
 	
 	private String getContent() throws ViewRequestException {

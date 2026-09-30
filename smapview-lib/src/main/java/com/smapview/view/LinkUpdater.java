@@ -92,7 +92,7 @@ class LinkUpdater {
 				}
 			}
 		});
-		Common.trace("Collected %d links from %d join values",
+		Common.info("Collected %d links from %d join values",
 				linkStatus.size(), source.size());
 		// search in view for existing links and set their status accordingly
 		context.queryExistingLinks(new Consumer<Link>() {

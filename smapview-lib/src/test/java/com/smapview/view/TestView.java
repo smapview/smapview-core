@@ -17,7 +17,7 @@ import jakarta.json.JsonObject;
 public class TestView extends View {
 
 	static {
-		Common.LOGGER.setLevel(Level.FINEST);
+		Common.setLoggingLevel(Level.FINEST);
 	}
 
 	TestView(String dgraphHttpUrl) {
